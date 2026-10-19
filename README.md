@@ -45,7 +45,7 @@
 ## 安装
 
 ```bat
-git clone https://github.com/<你的用户名>/chuanban-antigravity-theme-patch.git %USERPROFILE%\.antigravity-patch
+git clone https://github.com/AlexByoung/chuanban-antigravity-theme-patch.git %USERPROFILE%\.antigravity-patch
 cd %USERPROFILE%\.antigravity-patch
 copy config.example.json config.json
 ```
