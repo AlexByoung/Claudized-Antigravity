@@ -1,0 +1,9 @@
+# Per-user state written at runtime
+config.json
+watch.log
+.watch.pid
+
+node_modules/
+
+# Local notes
+RELEASE_PROMPT.md

@@ -1,0 +1,11 @@
+{
+  "translate": true,
+  "locale": "zh-CN",
+  "chineseTitles": true,
+  "hidePluginProjects": true,
+  "geminiMode": true,
+  "geminiEngine": "edge",
+  "geminiUrl": "https://gemini.google.com/app",
+  "geminiLayout": "float",
+  "geminiHotkey": "Ctrl+Alt+G"
+}

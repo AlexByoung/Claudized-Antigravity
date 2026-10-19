@@ -1,0 +1,16 @@
+{
+  "name": "chuanban-antigravity-theme-patch",
+  "version": "1.0.0",
+  "description": "Claude Code-style light/dark theme, Simplified Chinese UI and a Gemini side window for Google Antigravity, injected over CDP without modifying the app.",
+  "license": "MIT",
+  "private": true,
+  "os": ["win32"],
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "inject": "node inject.js",
+    "watch": "node inject.js --watch",
+    "remove": "node remove.js"
+  }
+}
