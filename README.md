@@ -1,4 +1,4 @@
-# chuanban-antigravity-theme-patch
+# Claudized Antigravity
 
 给 Google Antigravity（Windows 版）的非侵入式界面补丁：**Claude Code 风格的明暗主题**、**完整简体中文界面**，以及**和 Antigravity 并行使用的 Gemini 窗口**。
 
@@ -45,7 +45,7 @@
 ## 安装
 
 ```bat
-git clone https://github.com/AlexByoung/chuanban-antigravity-theme-patch.git %USERPROFILE%\.antigravity-patch
+git clone https://github.com/AlexByoung/Claudized-Antigravity.git %USERPROFILE%\.antigravity-patch
 cd %USERPROFILE%\.antigravity-patch
 copy config.example.json config.json
 ```
