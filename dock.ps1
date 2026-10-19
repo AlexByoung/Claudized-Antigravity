@@ -24,6 +24,7 @@
 # stdout events: ready | shown | hidden | closed | error <msg>
 #   | colors #LEFT #RIGHT <split> (Gemini's sidebar / header colors along its top row)
 #   | hotkey-ok | hotkey-fail | hotkey-off | hotkey-pressed (docked layout)
+#   | reloaded (the one page reload after Edge was launched)
 # stdin EOF, or the watcher process (-ParentPid) gone: hide Gemini and exit,
 # so the window, its login and drafts survive and get reused.
 # -Close: close an existing Gemini window gracefully and exit (remove.js).
@@ -71,6 +72,8 @@ public static class GeminiDock {
   [DllImport("user32.dll")] static extern bool SetProcessDpiAwarenessContext(IntPtr v);
   [DllImport("user32.dll")] static extern bool SetForegroundWindow(IntPtr h);
   [DllImport("user32.dll")] static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll")] static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
+  [DllImport("user32.dll")] static extern short GetAsyncKeyState(int vk);
   [DllImport("user32.dll")] static extern bool AttachThreadInput(uint a, uint b, bool attach);
   [DllImport("kernel32.dll")] static extern uint GetCurrentThreadId();
   [DllImport("user32.dll")] static extern bool PostMessage(IntPtr h, uint m, IntPtr w, IntPtr l);
@@ -108,6 +111,10 @@ public static class GeminiDock {
   static bool shown = false;
   static int shownTicks = 0;        // ticks since the last show (page-content check)
   static bool nudged = false;       // one hide/show cycle already tried for this show
+  // After Edge starts, Google renews its device-bound session cookies a moment
+  // after the first page request, so a page loaded right at startup can render
+  // signed out. One reload a few seconds later picks up the renewed session.
+  static DateTime reloadAfter = DateTime.MinValue, reloadUntil = DateTime.MinValue;
   static int topPx = 70;            // Antigravity's title bar height (physical px)
   // Where Edge's page content sits inside its window: top = Edge's own app
   // title bar, the others its (unpainted) borders. null = not measured yet.
@@ -216,6 +223,25 @@ public static class GeminiDock {
     string args = "--user-data-dir=\"" + profileDir + "\" --app=\"" + url + "\" --no-first-run --no-default-browser-check --disable-direct-composition " + pos;
     // ShellExecute: Edge must not inherit our stdout/stderr pipes.
     Process.Start(new ProcessStartInfo(edge, args) { UseShellExecute = true });
+    reloadAfter = DateTime.Now.AddSeconds(6);
+    reloadUntil = DateTime.Now.AddSeconds(20);
+  }
+
+  // The one reload after a launch: a real F5, sent only while the Gemini window
+  // is the active window (so the key cannot reach another program) and no
+  // modifier is held. Not done by then (window hidden or in the background):
+  // skipped.
+  static void MaybeReload() {
+    if (reloadUntil == DateTime.MinValue) return;
+    DateTime now = DateTime.Now;
+    if (now > reloadUntil) { reloadAfter = reloadUntil = DateTime.MinValue; return; }
+    if (now < reloadAfter || !insets.HasValue || GetForegroundWindow() != gemini) return;
+    foreach (int vk in new[] { 0x10, 0x11, 0x12, 0x5B, 0x5C }) // Shift, Ctrl, Alt, Win
+      if ((GetAsyncKeyState(vk) & 0x8000) != 0) return;
+    keybd_event(0x74 /* VK_F5 */, 0x3F, 0, UIntPtr.Zero);
+    keybd_event(0x74, 0x3F, 0x2 /* KEYEVENTF_KEYUP */, UIntPtr.Zero);
+    reloadAfter = reloadUntil = DateTime.MinValue;
+    Emit("reloaded");
   }
 
   // Both layouts: borderless, owned by Antigravity, no taskbar button; the
@@ -680,6 +706,7 @@ public static class GeminiDock {
             if (layout == "float" && owner != IntPtr.Zero && !IsWindow(owner)) owner = IntPtr.Zero;
             if (IsWindowVisible(gemini) && !IsIconic(gemini)) {
               Sync();
+              MaybeReload();
               if (tick % 15 == 0) SampleColors();
               // Chromium can still consider the window occluded and keep the
               // page hidden (no visible content child, so no insets): one
