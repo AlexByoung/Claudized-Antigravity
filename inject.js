@@ -34,7 +34,7 @@ const { buildProjectHideScript } = require('./projects');
 
 function buildExpression() {
   const config = readConfig();
-  return buildInjectExpression(readCss(), buildI18nScript() + '\n' + buildModeScript() + '\n' + buildTitleScript(config) + '\n' + buildProjectHideScript(config));
+  return buildInjectExpression(readCss(), buildI18nScript() + '\n' + buildModeScript() + '\n' + buildTitleScript(config) + '\n' + buildProjectHideScript(config), config.themeStyle);
 }
 
 function shortTitle(page) {
@@ -43,7 +43,7 @@ function shortTitle(page) {
 }
 
 function describe(res) {
-  return `主题: ${res.theme} · 界面语言: ${res.i18n === 'off' ? '英文原版' : res.i18n}`;
+  return `主题: ${res.theme}${res.style === 'classic' ? '（经典）' : ''} · 界面语言: ${res.i18n === 'off' ? '英文原版' : res.i18n}`;
 }
 
 const WATCH = process.argv.includes('--watch');
@@ -116,12 +116,32 @@ function acquireLock() {
   }
 }
 
+// Per-user fonts (LXGW WenKai…) are not always loaded by Windows at sign-in;
+// fonts.ps1 loads them into the session. Antigravity only sees fonts that
+// were there when it started, so this runs first thing (watcher autostarts
+// at sign-in). Async: never delays the injection.
+function loadFonts() {
+  if (process.platform !== 'win32') return;
+  const { execFile } = require('child_process');
+  execFile(
+    'powershell.exe',
+    ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(__dirname, 'fonts.ps1')],
+    { windowsHide: true, timeout: 30000 },
+    (err, stdout) => {
+      if (err) return log(`[!] 加载字体失败: ${err.message.split('\n')[0]}`);
+      const names = stdout.split(/\r?\n/).filter((l) => l.startsWith('loaded ')).map((l) => l.slice(7));
+      if (names.length) log(`[字体] 已加载: ${names.join(', ')}`);
+    }
+  );
+}
+
 async function watch() {
   acquireLock();
   try {
     fs.writeFileSync(LOG_FILE, '');
   } catch {}
   log(`[*] 守护模式启动 (PID ${process.pid})，每 2 秒检查一次窗口`);
+  loadFonts();
 
   // targetId -> { session, scriptId }; a null session marks an attach in flight.
   const attached = new Map();

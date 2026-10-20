@@ -67,6 +67,7 @@ function setSetting(key, value) {
     geminiLayout: (v) => v === 'float' || v === 'docked',
     geminiHotkey: (v) => v === '' || parseHotkey(v) !== null,
     chineseTitles: (v) => v === true || v === false,
+    themeStyle: (v) => v === 'clay' || v === 'classic',
   };
   if (!Object.prototype.hasOwnProperty.call(valid, key) || !valid[key](value)) return false;
   const config = readConfig();
@@ -84,6 +85,7 @@ function buildI18nScript() {
   let generalTitles = ['General'];
   let appTitles = ['Application'];
   let versionTitles = ['App version'];
+  let appearanceTitles = ['Appearance'];
   if (config.translate) {
     const { dict, rules = [], timeRules = [], sentences = [] } = loadLocale(config.locale);
     const payload = JSON.stringify({ locale: config.locale, dict, rules, timeRules, sentences });
@@ -91,6 +93,7 @@ function buildI18nScript() {
     if (typeof dict.General === 'string') generalTitles.push(dict.General);
     if (typeof dict.Application === 'string') appTitles.push(dict.Application);
     if (typeof dict['App version'] === 'string') versionTitles.push(dict['App version']);
+    if (typeof dict.Appearance === 'string') appearanceTitles.push(dict.Appearance);
   }
   const gemini =
     config.geminiMode === false || config.geminiEngine === 'webview'
@@ -102,6 +105,8 @@ function buildI18nScript() {
   const rowConfig = {
     current, locales, generalTitles, appTitles, versionTitles, gemini,
     chineseTitles: config.chineseTitles !== false,
+    appearanceTitles,
+    themeStyle: config.themeStyle === 'classic' ? 'classic' : 'clay',
     binding: LOCALE_BINDING, settingBinding: SETTING_BINDING,
   };
   parts.push(`(${langRowMain.toString()})(${JSON.stringify(rowConfig)});`);
@@ -494,10 +499,72 @@ function langRowMain(C) {
     if (last) last.parentElement.appendChild(buildFn());
   }
 
+  // ── Color style: Clay / Classic (Settings > Appearance) ──────────────
+  const STYLE_ID = 'ag-style-row';
+  const S = zh
+    ? {
+        heading: '配色风格', title: '风格', clay: '陶土', classic: '经典',
+        clayDesc: '米白与炭灰底色，陶土红强调色。',
+        classicDesc: '和 Claude Code 应用一致的白色与深色，蓝色选中和链接。',
+        hint: '浅色、深色各有一套，跟随上方的主题切换。',
+      }
+    : {
+        heading: 'Color Style', title: 'Style', clay: 'Clay', classic: 'Classic',
+        clayDesc: 'Ivory and charcoal surfaces with clay-red accents.',
+        classicDesc: 'Neutral white and dark like the Claude Code app, blue selection and links.',
+        hint: 'Each has a light and a dark palette, following the theme above.',
+      };
+  function buildStyle() {
+    const sec = document.createElement('div');
+    sec.id = STYLE_ID;
+    sec.className = 'space-y-2';
+    sec.setAttribute('data-ag-no-i18n', '');
+    sec.innerHTML =
+      '<div class="flex flex-col gap-1"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><h3 class="m-0 text-sm font-medium"></h3></div></div>' +
+      '<div class="text-xs text-muted-foreground leading-relaxed" data-k="intro"></div></div>' +
+      '<div><div class="bg-transparent rounded-xl border border-border overflow-hidden divide-y divide-border">' +
+      rowHtml('<div role="group" aria-orientation="horizontal" class="inline-flex items-center rounded-lg border border-border bg-secondary/20 p-0.5 gap-0.5 select-none h-8"></div>') +
+      '</div></div>';
+    sec.querySelector('h3').textContent = S.heading;
+    sec.querySelector('[data-k=intro]').textContent = S.hint;
+    const row = sec.querySelector('.divide-y > .w-full');
+    row.querySelector('[data-k=title]').textContent = S.title;
+    const desc = row.querySelector('[data-k=desc]');
+    desc.textContent = C.themeStyle === 'classic' ? S.classicDesc : S.clayDesc;
+    const group = row.querySelector('[role=group]');
+    for (const [id, label] of [['clay', S.clay], ['classic', S.classic]]) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = BTN;
+      b.textContent = label;
+      b.setAttribute('aria-pressed', String(id === C.themeStyle));
+      if (id === C.themeStyle) b.setAttribute('data-pressed', '');
+      b.addEventListener('click', () => {
+        if (id === C.themeStyle) return;
+        const send = window[C.settingBinding];
+        if (typeof send !== 'function') {
+          desc.textContent = T.noWatcher;
+          return;
+        }
+        for (const x of group.children) {
+          x.setAttribute('aria-pressed', String(x === b));
+          x.toggleAttribute('data-pressed', x === b);
+        }
+        desc.textContent = id === 'classic' ? S.classicDesc : S.clayDesc;
+        // switch at once; the watcher then saves config.json and re-injects
+        document.documentElement.setAttribute('data-ag-style', id);
+        send(JSON.stringify({ key: 'themeStyle', value: id }));
+      });
+      group.appendChild(b);
+    }
+    return sec;
+  }
+
   function ensure() {
     const general = panelByTitle(C.generalTitles);
     appendSection(general, ID, build);
     if (C.gemini) appendSection(general, GEMINI_ID, buildGemini);
+    appendSection(panelByTitle(C.appearanceTitles || ['Appearance']), STYLE_ID, buildStyle);
     ensureAbout();
   }
 
@@ -521,7 +588,7 @@ function langRowMain(C) {
     },
     destroy() {
       observer.disconnect();
-      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID).forEach((n) => {
+      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID).forEach((n) => {
         const section = n.closest('div.space-y-2');
         // a standalone About section is ours entirely; a row inside the
         // native Version card is removed on its own

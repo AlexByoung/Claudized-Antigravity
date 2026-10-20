@@ -1,6 +1,7 @@
 {
   "translate": true,
   "locale": "zh-CN",
+  "themeStyle": "clay",
   "chineseTitles": true,
   "hidePluginProjects": true,
   "geminiMode": true,

@@ -11,7 +11,9 @@
 ## 功能
 
 **主题**
-- 浅色（象牙白）/ 深色（炭灰）两套配色，跟随 Antigravity 自身的明暗切换，过渡平滑
+- 两种配色风格，在设置 → 外观 → **配色风格** 中切换，各有浅色、深色两套，跟随 Antigravity 自身的明暗切换：
+  - **陶土 Clay**（默认）：米白 / 炭灰底色，陶土红强调色
+  - **经典 Classic**：和 Claude Code 应用一致的中性白 / 深色，蓝色选中、链接和焦点，GitHub 风格代码高亮
 - 覆盖聊天区、侧栏、卡片、代码高亮（Prism）以及内嵌的 VS Code 编辑器、Diff、终端和菜单
 - 阅读区使用衬线字体，中文回退到霞鹜文楷；思考链的行距更紧凑
 - 隐藏标题栏右侧的 File / View / Window 菜单
@@ -41,7 +43,7 @@
 - [Node.js](https://nodejs.org/) 22 或更高（使用内置的 `fetch` 与 `WebSocket`，无需 `npm install`）
 - Google Antigravity。它默认开启 CDP 端口（`%APPDATA%\Antigravity\DevToolsActivePort`），无需额外启动参数
 - Microsoft Edge：仅 Gemini 窗口需要
-- 可选字体：[霞鹜文楷 LXGW WenKai](https://github.com/lxgw/LxgwWenKai)（Regular + Medium）。安装后需**完全退出** Antigravity（托盘里也要退出）再打开才会生效。未安装时回退到微软雅黑
+- 可选字体：[霞鹜文楷 LXGW WenKai](https://github.com/lxgw/LxgwWenKai)（Regular + Medium）。安装后需**完全退出** Antigravity（托盘里也要退出）再打开才会生效。未安装时回退到微软雅黑。Windows 有时不会在登录时加载「仅为当前用户安装」的字体，守护进程启动时会自动加载 `LXGW*` / `Sarasa*` 字体（`fonts.ps1`）
 
 ## 安装
 
@@ -72,6 +74,7 @@ copy config.example.json config.json
 | 键 | 默认值 | 说明 |
 | --- | --- | --- |
 | `translate` | `true` | 是否翻译界面 |
+| `themeStyle` | `"clay"` | 配色风格：`clay` 陶土 / `classic` 经典 |
 | `locale` | `"zh-CN"` | 语言文件 `locale.<locale>.js` |
 | `chineseTitles` | `true` | 新对话首条消息为中文时，把英文标题翻译成中文 |
 | `hidePluginProjects` | `true` | 隐藏插件 sidecar 自带的空项目 |
@@ -89,13 +92,14 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 | --- | --- |
 | `inject.js` | 入口：单次注入 / 守护模式，处理页面回调、热更新 |
 | `cdp.js` | CDP 连接、注入表达式、撤销表达式 |
-| `theme.css` | 主题（1 浅色 · 2 深色 · 3 组件 · 4 代码高亮 · 5 VS Code · 6 字体 · 7 标题栏） |
+| `theme.css` | 主题（1 浅色 · 2 深色 · 3 组件 · 4 代码高亮 · 5 VS Code · 6 字体 · 7 标题栏 · 8 经典风格） |
 | `i18n.js` | 翻译引擎、设置页「语言」「Gemini」「检查更新」行 |
 | `locale.zh-CN.js` | 简体中文词库 |
 | `modes.js` | 左上角 Gemini 按钮 / 切换下拉菜单 |
 | `titles.js` | 中文对话标题 |
 | `projects.js` | 隐藏插件 sidecar 项目 |
 | `gemini-dock.js` + `dock.ps1` | Edge 窗口的启动、停靠、小窗外框和全局快捷键（Win32） |
+| `fonts.ps1` | 守护进程启动时把已安装的 LXGW / Sarasa 字体加载到当前会话 |
 | `remove.js` | 撤销 |
 
 ### 添加语言
@@ -132,7 +136,7 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 
 A runtime patch for Google Antigravity on Windows. It injects over Antigravity's built-in CDP port and never touches the installation.
 
-- **Theme:** Claude Code-style light (ivory) and dark (charcoal) palettes. They cover chat, sidebar, code highlighting and the embedded VS Code views.
+- **Theme:** two color styles, each with a light and a dark palette, picked in Settings → Appearance → Color Style. *Clay* (default) is ivory and charcoal with clay-red accents. *Classic* is neutral white and dark like the Claude Code app, with blue selection and links. Both cover chat, sidebar, code highlighting and the embedded VS Code views.
 - **Simplified Chinese UI:** about 1,550 strings plus template and context rules. Only controls are translated, never chat content or code. Switch languages in Settings → General → Language.
 - **Chinese conversation titles:** Antigravity often titles Chinese conversations in English. The patch has the selected model translate that title in a short read-only throwaway run, which sees only the title. If the run fails, it falls back to the first sentence. It runs once per new conversation and never overrides a title you set.
 - **Plugin sidecar projects hidden:** plugins with a sidecar come with an empty project that re-registers itself after deletion. These projects are hidden from the sidebar, Settings and project pickers.

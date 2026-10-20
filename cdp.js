@@ -145,8 +145,10 @@ async function browserUserAgent(port) {
 // when the CSS is unchanged, and re-appends it so it stays last in <head>.
 // Only touches our own <style> and data attributes on <html>; never writes
 // localStorage or anything React owns. `i18nScript` (from i18n.js) is
-// optional; an empty string leaves the UI in English.
-function buildInjectExpression(css, i18nScript = '') {
+// optional; an empty string leaves the UI in English. `themeStyle` picks the
+// palette family in theme.css (html[data-ag-style]): 'clay' or 'classic'.
+function buildInjectExpression(css, i18nScript = '', themeStyle = 'clay') {
+  const style = themeStyle === 'classic' ? 'classic' : 'clay';
   return `(() => {
     const css = ${JSON.stringify(css)};
     const apply = () => {
@@ -160,6 +162,7 @@ function buildInjectExpression(css, i18nScript = '') {
         document.head.appendChild(style);
       }
       document.documentElement.setAttribute('data-ag-preset', 'high-contrast');
+      document.documentElement.setAttribute('data-ag-style', ${JSON.stringify(style)});
       document.documentElement.setAttribute('data-ag-patch', ${JSON.stringify(PATCH_VERSION)});
       window.__ag_patch_version = ${JSON.stringify(PATCH_VERSION)};
     };
@@ -178,6 +181,7 @@ function buildInjectExpression(css, i18nScript = '') {
     return {
       version: ${JSON.stringify(PATCH_VERSION)},
       theme: document.body ? (document.body.classList.contains('theme-dark') ? 'dark' : 'light') : 'loading',
+      style: ${JSON.stringify(style)},
       i18n,
     };
   })()`;
@@ -188,6 +192,7 @@ const REMOVE_EXPRESSION = `(() => {
   nodes.forEach((n) => n.remove());
   document.documentElement.removeAttribute('data-ag-preset');
   document.documentElement.removeAttribute('data-ag-patch');
+  document.documentElement.removeAttribute('data-ag-style');
   delete window.__ag_patch_version;
   ${REVERT_EXPRESSION}
   ${MODE_DESTROY_EXPRESSION}
