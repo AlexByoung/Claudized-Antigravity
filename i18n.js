@@ -68,6 +68,8 @@ function setSetting(key, value) {
     geminiHotkey: (v) => v === '' || parseHotkey(v) !== null,
     chineseTitles: (v) => v === true || v === false,
     themeStyle: (v) => v === 'clay' || v === 'classic',
+    latinFont: (v) => v === 'claude' || v === 'system',
+    cjkFont: (v) => v === 'wenkai' || v === 'system',
   };
   if (!Object.prototype.hasOwnProperty.call(valid, key) || !valid[key](value)) return false;
   const config = readConfig();
@@ -107,6 +109,8 @@ function buildI18nScript() {
     chineseTitles: config.chineseTitles !== false,
     appearanceTitles,
     themeStyle: config.themeStyle === 'classic' ? 'classic' : 'clay',
+    latinFont: config.latinFont === 'system' ? 'system' : 'claude',
+    cjkFont: config.cjkFont === 'system' ? 'system' : 'wenkai',
     binding: LOCALE_BINDING, settingBinding: SETTING_BINDING,
   };
   parts.push(`(${langRowMain.toString()})(${JSON.stringify(rowConfig)});`);
@@ -499,72 +503,93 @@ function langRowMain(C) {
     if (last) last.parentElement.appendChild(buildFn());
   }
 
-  // ── Color style: Clay / Classic (Settings > Appearance) ──────────────
+  // ── Look: color style + fonts (Settings > Appearance) ───────────────
+  // Two sections of segmented switches. Each click applies its <html>
+  // attribute at once (theme.css reacts), then the watcher saves the choice
+  // to config.json and re-injects.
   const STYLE_ID = 'ag-style-row';
-  const S = zh
+  const FONT_ID = 'ag-font-row';
+  const L = zh
     ? {
-        heading: '配色风格', title: '风格', clay: '陶土', classic: '经典',
-        clayDesc: '米白与炭灰底色，陶土红强调色。',
-        classicDesc: '和 Claude Code 应用一致的白色与深色，蓝色选中和链接。',
-        hint: '浅色、深色各有一套，跟随上方的主题切换。',
+        style: '配色风格', styleHint: '浅色、深色各有一套，跟随上方的主题切换。', styleRow: '风格',
+        clay: '陶土', classic: '经典',
+        fonts: '字体', latin: '西文字体', cjk: '中文字体',
+        claude: 'Claude', system: '系统默认', wenkai: '霞鹜文楷', hei: '黑体',
       }
     : {
-        heading: 'Color Style', title: 'Style', clay: 'Clay', classic: 'Classic',
-        clayDesc: 'Ivory and charcoal surfaces with clay-red accents.',
-        classicDesc: 'Neutral white and dark like the Claude Code app, blue selection and links.',
-        hint: 'Each has a light and a dark palette, following the theme above.',
+        style: 'Color Style', styleHint: 'Each has a light and a dark palette, following the theme above.', styleRow: 'Style',
+        clay: 'Clay', classic: 'Classic',
+        fonts: 'Fonts', latin: 'Latin font', cjk: 'Chinese font',
+        claude: 'Claude', system: 'System', wenkai: 'LXGW WenKai', hei: 'Sans (YaHei)',
       };
-  function buildStyle() {
+  const GROUP_HTML = '<div role="group" aria-orientation="horizontal" class="inline-flex items-center rounded-lg border border-border bg-secondary/20 p-0.5 gap-0.5 select-none h-8"></div>';
+
+  // rows: [{ title, key, attr, current, options: [[value, label], ...] }]
+  function buildLookSection(id, heading, hint, rows) {
     const sec = document.createElement('div');
-    sec.id = STYLE_ID;
+    sec.id = id;
     sec.className = 'space-y-2';
     sec.setAttribute('data-ag-no-i18n', '');
     sec.innerHTML =
       '<div class="flex flex-col gap-1"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><h3 class="m-0 text-sm font-medium"></h3></div></div>' +
-      '<div class="text-xs text-muted-foreground leading-relaxed" data-k="intro"></div></div>' +
+      (hint ? '<div class="text-xs text-muted-foreground leading-relaxed" data-k="intro"></div>' : '') + '</div>' +
       '<div><div class="bg-transparent rounded-xl border border-border overflow-hidden divide-y divide-border">' +
-      rowHtml('<div role="group" aria-orientation="horizontal" class="inline-flex items-center rounded-lg border border-border bg-secondary/20 p-0.5 gap-0.5 select-none h-8"></div>') +
+      rows.map(() => rowHtml(GROUP_HTML)).join('') +
       '</div></div>';
-    sec.querySelector('h3').textContent = S.heading;
-    sec.querySelector('[data-k=intro]').textContent = S.hint;
-    const row = sec.querySelector('.divide-y > .w-full');
-    row.querySelector('[data-k=title]').textContent = S.title;
-    const desc = row.querySelector('[data-k=desc]');
-    desc.textContent = C.themeStyle === 'classic' ? S.classicDesc : S.clayDesc;
-    const group = row.querySelector('[role=group]');
-    for (const [id, label] of [['clay', S.clay], ['classic', S.classic]]) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = BTN;
-      b.textContent = label;
-      b.setAttribute('aria-pressed', String(id === C.themeStyle));
-      if (id === C.themeStyle) b.setAttribute('data-pressed', '');
-      b.addEventListener('click', () => {
-        if (id === C.themeStyle) return;
-        const send = window[C.settingBinding];
-        if (typeof send !== 'function') {
-          desc.textContent = T.noWatcher;
-          return;
-        }
-        for (const x of group.children) {
-          x.setAttribute('aria-pressed', String(x === b));
-          x.toggleAttribute('data-pressed', x === b);
-        }
-        desc.textContent = id === 'classic' ? S.classicDesc : S.clayDesc;
-        // switch at once; the watcher then saves config.json and re-injects
-        document.documentElement.setAttribute('data-ag-style', id);
-        send(JSON.stringify({ key: 'themeStyle', value: id }));
-      });
-      group.appendChild(b);
-    }
+    sec.querySelector('h3').textContent = heading;
+    if (hint) sec.querySelector('[data-k=intro]').textContent = hint;
+    sec.querySelectorAll('.divide-y > .w-full').forEach((row, i) => {
+      const r = rows[i];
+      let current = r.current;
+      row.querySelector('[data-k=title]').textContent = r.title;
+      const desc = row.querySelector('[data-k=desc]');
+      desc.hidden = true; // no description line; only used for the watcher notice
+      const group = row.querySelector('[role=group]');
+      for (const [value, label] of r.options) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = BTN;
+        b.textContent = label;
+        b.setAttribute('aria-pressed', String(value === current));
+        if (value === current) b.setAttribute('data-pressed', '');
+        b.addEventListener('click', () => {
+          if (value === current) return;
+          const send = window[C.settingBinding];
+          if (typeof send !== 'function') {
+            desc.hidden = false;
+            desc.textContent = T.noWatcher;
+            return;
+          }
+          current = value;
+          for (const x of group.children) {
+            x.setAttribute('aria-pressed', String(x === b));
+            x.toggleAttribute('data-pressed', x === b);
+          }
+          document.documentElement.setAttribute(r.attr, value);
+          send(JSON.stringify({ key: r.key, value }));
+        });
+        group.appendChild(b);
+      }
+    });
     return sec;
   }
+  const buildStyle = () =>
+    buildLookSection(STYLE_ID, L.style, L.styleHint, [
+      { title: L.styleRow, key: 'themeStyle', attr: 'data-ag-style', current: C.themeStyle, options: [['clay', L.clay], ['classic', L.classic]] },
+    ]);
+  const buildFonts = () =>
+    buildLookSection(FONT_ID, L.fonts, '', [
+      { title: L.latin, key: 'latinFont', attr: 'data-ag-latin', current: C.latinFont, options: [['claude', L.claude], ['system', L.system]] },
+      { title: L.cjk, key: 'cjkFont', attr: 'data-ag-cjk', current: C.cjkFont, options: [['wenkai', L.wenkai], ['system', L.hei]] },
+    ]);
 
   function ensure() {
     const general = panelByTitle(C.generalTitles);
     appendSection(general, ID, build);
     if (C.gemini) appendSection(general, GEMINI_ID, buildGemini);
-    appendSection(panelByTitle(C.appearanceTitles || ['Appearance']), STYLE_ID, buildStyle);
+    const appearance = panelByTitle(C.appearanceTitles || ['Appearance']);
+    appendSection(appearance, STYLE_ID, buildStyle);
+    appendSection(appearance, FONT_ID, buildFonts);
     ensureAbout();
   }
 
@@ -588,7 +613,7 @@ function langRowMain(C) {
     },
     destroy() {
       observer.disconnect();
-      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID).forEach((n) => {
+      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID + ', #' + FONT_ID).forEach((n) => {
         const section = n.closest('div.space-y-2');
         // a standalone About section is ours entirely; a row inside the
         // native Version card is removed on its own

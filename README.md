@@ -15,7 +15,10 @@
   - **陶土 Clay**（默认）：米白 / 炭灰底色，陶土红强调色
   - **经典 Classic**：和 Claude Code 应用一致的中性白 / 深色，蓝色选中、链接和焦点，GitHub 风格代码高亮
 - 覆盖聊天区、侧栏、卡片、代码高亮（Prism）以及内嵌的 VS Code 编辑器、Diff、终端和菜单
-- 阅读区使用衬线字体，中文回退到霞鹜文楷；思考链的行距更紧凑
+- 字体可在设置 → 外观 → **字体** 中分别选择：
+  - 西文：**Claude**（界面无衬线、回复正文衬线 Georgia、输入框和代码等宽）/ **系统默认**（全部使用 Segoe UI 与 Cascadia/Consolas）
+  - 中文：**霞鹜文楷** / **黑体**（微软雅黑）
+- 思考链的行距更紧凑
 - 隐藏标题栏右侧的 File / View / Window 菜单
 
 **简体中文**
@@ -75,6 +78,8 @@ copy config.example.json config.json
 | --- | --- | --- |
 | `translate` | `true` | 是否翻译界面 |
 | `themeStyle` | `"clay"` | 配色风格：`clay` 陶土 / `classic` 经典 |
+| `latinFont` | `"claude"` | 西文字体：`claude` / `system` 系统默认 |
+| `cjkFont` | `"wenkai"` | 中文字体：`wenkai` 霞鹜文楷 / `system` 黑体（微软雅黑） |
 | `locale` | `"zh-CN"` | 语言文件 `locale.<locale>.js` |
 | `chineseTitles` | `true` | 新对话首条消息为中文时，把英文标题翻译成中文 |
 | `hidePluginProjects` | `true` | 隐藏插件 sidecar 自带的空项目 |
@@ -136,7 +141,7 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 
 A runtime patch for Google Antigravity on Windows. It injects over Antigravity's built-in CDP port and never touches the installation.
 
-- **Theme:** two color styles, each with a light and a dark palette, picked in Settings → Appearance → Color Style. *Clay* (default) is ivory and charcoal with clay-red accents. *Classic* is neutral white and dark like the Claude Code app, with blue selection and links. Both cover chat, sidebar, code highlighting and the embedded VS Code views.
+- **Theme:** two color styles, each with a light and a dark palette, picked in Settings → Appearance → Color Style. *Clay* (default) is ivory and charcoal with clay-red accents. *Classic* is neutral white and dark like the Claude Code app, with blue selection and links. Both cover chat, sidebar, code highlighting and the embedded VS Code views. Fonts are picked separately in Settings → Appearance → Fonts: Latin is Claude-style (serif replies) or system, and Chinese is LXGW WenKai or Microsoft YaHei.
 - **Simplified Chinese UI:** about 1,550 strings plus template and context rules. Only controls are translated, never chat content or code. Switch languages in Settings → General → Language.
 - **Chinese conversation titles:** Antigravity often titles Chinese conversations in English. The patch has the selected model translate that title in a short read-only throwaway run, which sees only the title. If the run fails, it falls back to the first sentence. It runs once per new conversation and never overrides a title you set.
 - **Plugin sidecar projects hidden:** plugins with a sidecar come with an empty project that re-registers itself after deletion. These projects are hidden from the sidebar, Settings and project pickers.

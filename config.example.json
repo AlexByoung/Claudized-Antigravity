@@ -2,6 +2,8 @@
   "translate": true,
   "locale": "zh-CN",
   "themeStyle": "clay",
+  "latinFont": "claude",
+  "cjkFont": "wenkai",
   "chineseTitles": true,
   "hidePluginProjects": true,
   "geminiMode": true,

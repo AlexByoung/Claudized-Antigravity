@@ -34,7 +34,7 @@ const { buildProjectHideScript } = require('./projects');
 
 function buildExpression() {
   const config = readConfig();
-  return buildInjectExpression(readCss(), buildI18nScript() + '\n' + buildModeScript() + '\n' + buildTitleScript(config) + '\n' + buildProjectHideScript(config), config.themeStyle);
+  return buildInjectExpression(readCss(), buildI18nScript() + '\n' + buildModeScript() + '\n' + buildTitleScript(config) + '\n' + buildProjectHideScript(config), config);
 }
 
 function shortTitle(page) {

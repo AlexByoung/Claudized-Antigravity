@@ -498,21 +498,46 @@ body.theme-dark [data-theme="dark"] {
 
 /* ==========================================================================
    6. 字体分层体系 (both modes)
-   Latin uses the first font that has the glyph; CJK falls through to
-   LXGW WenKai (霞鹜文楷). Anything with CJK glyphs (system-ui maps to
-   Microsoft YaHei UI on Chinese Windows) must come AFTER WenKai, or it
-   would capture the Chinese text first.
-   Not installed on this machine yet: Anthropic Sans/Serif/Mono, Styrene,
-   Tiempos, Sarasa. They are kept first so they take over once installed.
+   Every stack is "Latin fonts, then CJK fonts, then fallbacks": a font is
+   used for the characters it has, so Latin fonts (no CJK glyphs) draw the
+   letters and the CJK font draws the Chinese. Anything with CJK glyphs
+   (system-ui is Microsoft YaHei UI on Chinese Windows) must come after the
+   chosen CJK font, or it would capture the Chinese text first.
+
+   Settings > Appearance > Fonts picks each half (attributes on <html>):
+     data-ag-latin  claude (default) | system
+       claude: sans UI, serif reading text (Anthropic/Tiempos when installed,
+               else Segoe UI + Georgia), monospace input and code
+       system: the computer's own fonts everywhere (Segoe UI, Cascadia/Consolas)
+     data-ag-cjk    wenkai (default) | system
+       wenkai: LXGW WenKai (霞鹜文楷);  system: Microsoft YaHei (微软雅黑)
    ========================================================================== */
 html:has(> body) {
-  --font-sans: 'Anthropic Sans', 'Styrene B', 'Segoe UI', 'LXGW WenKai', 'LXGW WenKai Screen', 'Microsoft YaHei UI', system-ui, sans-serif !important;
-  --font-mono: 'Anthropic Mono', 'Sarasa Mono SC', Consolas, 'LXGW WenKai Mono', 'LXGW WenKai', monospace !important;
+  --ag-latin-ui: 'Anthropic Sans', 'Styrene B', 'Segoe UI';
+  --ag-latin-read: 'Anthropic Serif', 'Tiempos Text', Georgia, Cambria;
+  --ag-latin-mono: 'Anthropic Mono', Consolas;
+  --ag-latin-input: 'Anthropic Mono', Consolas;
+  --ag-cjk: 'LXGW WenKai', 'LXGW WenKai Screen', '霞鹜文楷';
+  --ag-cjk-mono: 'LXGW WenKai Mono', 'LXGW WenKai', '霞鹜文楷';
+}
+html[data-ag-latin="system"]:has(> body) {
+  --ag-latin-ui: 'Segoe UI Variable Text', 'Segoe UI';
+  --ag-latin-read: 'Segoe UI Variable Text', 'Segoe UI';
+  --ag-latin-mono: 'Cascadia Mono', Consolas;
+  --ag-latin-input: 'Segoe UI Variable Text', 'Segoe UI';
+}
+html[data-ag-cjk="system"]:has(> body) {
+  --ag-cjk: 'Microsoft YaHei UI', 'Microsoft YaHei';
+  --ag-cjk-mono: 'Microsoft YaHei UI', 'Microsoft YaHei';
+}
+html:has(> body) {
+  --font-sans: var(--ag-latin-ui), var(--ag-cjk), 'Microsoft YaHei UI', system-ui, sans-serif !important;
+  --font-mono: var(--ag-latin-mono), var(--ag-cjk-mono), 'Microsoft YaHei UI', monospace !important;
 }
 
 /* UI 控件层 */
 body, button, input, select, textarea, .bg-sidebar, aside {
-  font-family: 'Anthropic Sans', 'Styrene B', 'Segoe UI', 'LXGW WenKai', 'LXGW WenKai Screen', '霞鹜文楷', 'Sarasa UI SC', 'Microsoft YaHei UI', system-ui, sans-serif !important;
+  font-family: var(--ag-latin-ui), var(--ag-cjk), 'Microsoft YaHei UI', system-ui, sans-serif !important;
 }
 
 /* 阅读正文层 (书卷气：西文衬线 + 中文文楷)
@@ -523,7 +548,7 @@ body, button, input, select, textarea, .bg-sidebar, aside {
 [data-testid="planner-response-text"] :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th),
 [class*="_code:not(pre_code)"] :is(p, li, h1, h2, h3, h4, h5, h6, blockquote, td, th),
 .prose, .markdown, [class*="chat-message"] {
-  font-family: 'Anthropic Serif', 'Tiempos Text', Georgia, Cambria, 'LXGW WenKai', 'LXGW WenKai Screen', '霞鹜文楷', 'Sarasa Gothic SC', 'Microsoft YaHei', serif !important;
+  font-family: var(--ag-latin-read), var(--ag-cjk), 'Microsoft YaHei', serif !important;
   line-height: 1.55 !important;
   letter-spacing: -0.003em;
 }
@@ -541,12 +566,12 @@ div.relative:has(> [data-testid="thinking-collapsible-trigger"]) .leading-relaxe
 
 /* 代码与终端层 */
 code, pre, .monaco-editor, .xterm, [class*="language-"] {
-  font-family: 'Anthropic Mono', 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', Consolas, 'LXGW WenKai Mono', 'LXGW WenKai', 'Courier New', monospace !important;
+  font-family: var(--ag-latin-mono), var(--ag-cjk-mono), 'Microsoft YaHei UI', 'Courier New', monospace !important;
 }
 
-/* 主输入框编辑区 (Codex 同款粗衬线打字机风格) */
+/* 主输入框编辑区 (Claude: typewriter-style monospace; system: the UI font) */
 div[contenteditable="true"], textarea, [data-composer], .ProseMirror {
-  font-family: 'Sarasa Mono Slab SC', '等距更纱黑体 Slab SC', 'Anthropic Mono', Consolas, 'LXGW WenKai', monospace !important;
+  font-family: var(--ag-latin-input), var(--ag-cjk), 'Microsoft YaHei UI', monospace !important;
 }
 
 

@@ -145,10 +145,14 @@ async function browserUserAgent(port) {
 // when the CSS is unchanged, and re-appends it so it stays last in <head>.
 // Only touches our own <style> and data attributes on <html>; never writes
 // localStorage or anything React owns. `i18nScript` (from i18n.js) is
-// optional; an empty string leaves the UI in English. `themeStyle` picks the
-// palette family in theme.css (html[data-ag-style]): 'clay' or 'classic'.
-function buildInjectExpression(css, i18nScript = '', themeStyle = 'clay') {
-  const style = themeStyle === 'classic' ? 'classic' : 'clay';
+// optional; an empty string leaves the UI in English. `look` picks variants in
+// theme.css through attributes on <html>: themeStyle (data-ag-style: clay |
+// classic), latinFont (data-ag-latin: claude | system) and cjkFont
+// (data-ag-cjk: wenkai | system).
+function buildInjectExpression(css, i18nScript = '', look = {}) {
+  const style = look.themeStyle === 'classic' ? 'classic' : 'clay';
+  const latin = look.latinFont === 'system' ? 'system' : 'claude';
+  const cjk = look.cjkFont === 'system' ? 'system' : 'wenkai';
   return `(() => {
     const css = ${JSON.stringify(css)};
     const apply = () => {
@@ -163,6 +167,8 @@ function buildInjectExpression(css, i18nScript = '', themeStyle = 'clay') {
       }
       document.documentElement.setAttribute('data-ag-preset', 'high-contrast');
       document.documentElement.setAttribute('data-ag-style', ${JSON.stringify(style)});
+      document.documentElement.setAttribute('data-ag-latin', ${JSON.stringify(latin)});
+      document.documentElement.setAttribute('data-ag-cjk', ${JSON.stringify(cjk)});
       document.documentElement.setAttribute('data-ag-patch', ${JSON.stringify(PATCH_VERSION)});
       window.__ag_patch_version = ${JSON.stringify(PATCH_VERSION)};
     };
@@ -193,6 +199,8 @@ const REMOVE_EXPRESSION = `(() => {
   document.documentElement.removeAttribute('data-ag-preset');
   document.documentElement.removeAttribute('data-ag-patch');
   document.documentElement.removeAttribute('data-ag-style');
+  document.documentElement.removeAttribute('data-ag-latin');
+  document.documentElement.removeAttribute('data-ag-cjk');
   delete window.__ag_patch_version;
   ${REVERT_EXPRESSION}
   ${MODE_DESTROY_EXPRESSION}
