@@ -858,3 +858,58 @@ html[data-ag-style="classic"] > body.theme-dark [data-theme="dark"] {
   --sdk-color-text-base: #ECECEA !important;
   --sdk-background-primary: #262625 !important;
 }
+
+
+/* ==========================================================================
+   9. Narrow windows · auxiliary pane (辅助窗格)
+   The conversation column is a split row (container-type: size): the
+   conversation (min-width 300px) and, last, the aux pane, sized as a % of
+   the row that never shrinks. In a half-screen window the two minimums add
+   up to more than the row, so the pane was pushed past the window edge.
+   Below 900px it becomes a drawer over the conversation; above, it is
+   capped so the conversation keeps its 300px.
+   ========================================================================== */
+.outline-none[style*="container-type"] > div[style*="flex-shrink: 0"]:last-child {
+  max-width: calc(100% - 301px);
+}
+.outline-none[style*="container-type"] > div[style*="flex-shrink: 0"]:last-child > div[style*="cqw"] {
+  max-width: 100%;
+}
+@container (max-width: 900px) {
+  .outline-none[style*="container-type"] > div[style*="flex-shrink: 0"]:last-child {
+    position: absolute !important;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    width: min(100%, max(360px, 70%)) !important;
+    max-width: none;
+    background: var(--background);
+    border-left: 1px solid var(--border);
+    box-shadow: -10px 0 30px rgba(0, 0, 0, 0.12);
+    transform: translateX(0);
+    transition: transform 260ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 260ms step-end !important;
+  }
+  .outline-none[style*="container-type"] > div[style*="flex-shrink: 0"][style*="width: 0%"]:last-child {
+    transform: translateX(100%);
+    box-shadow: none;
+  }
+  .outline-none[style*="container-type"] > div[style*="flex-shrink: 0"]:last-child > div[style*="cqw"] {
+    width: 100% !important;
+    max-width: none;
+  }
+  /* the resize handle has nothing to resize in drawer mode */
+  .outline-none[style*="container-type"]:has(> div[style*="flex-shrink: 0"]:last-child) > .bg-border {
+    display: none;
+  }
+}
+
+
+/* ==========================================================================
+   10. Settings: the app's "Chat Settings" section (Appearance) is mirrored
+   under General > Conversations by i18n.js; the original stays mounted but
+   hidden, so the mirror can operate it.
+   ========================================================================== */
+[data-ag-moved] {
+  display: none !important;
+}

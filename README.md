@@ -36,8 +36,14 @@
 - Antigravity 退出时 Gemini 窗口自动隐藏
 - 开机或重启后第一次打开 Gemini 时，页面可能抢在 Google 续期登录凭证之前加载而显示未登录；补丁会在 Edge 启动约 6 秒后自动刷新一次（仅当 Gemini 是当前窗口时），无需重新登录
 
+**设置整理**
+- 设置 → 常规 最上面依次是补丁的 **语言**、**对话**、**Gemini**，然后才是 Antigravity 自己的权限类设置
+- **对话**：原本放在「外观」里的「详细智能体对话」「对话宽度」移到这里（原设置隐藏在外观中，这里的开关直接操作它），另有「中文对话标题」和 **已归档的对话** 列表，可在设置里直接恢复归档的对话
+- 设置 → 应用 → **皮肤补丁**：显示补丁版本并**检查更新**。用 git 克隆的会比对 GitHub 上的 `main`，有新版本时可一键更新（`git pull --ff-only`，随后自动重启守护进程）；下载 zip 的则比对最新 Release 并给出下载链接
+
 **其他**
 - 「版本」与「检查更新」移到 设置 → 应用 的版本卡片里
+- 窄窗口（例如和其他应用左右分屏）时，右侧的**辅助窗格**改为从右侧滑出的抽屉，盖在对话上方，不再被挤出窗口
 - 守护模式：Antigravity 重启、刷新、开新窗口后自动重新注入；修改 `theme.css` / `config.json` / 语言文件后热更新
 
 ## 环境要求
@@ -105,6 +111,7 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 | `projects.js` | 隐藏插件 sidecar 项目 |
 | `gemini-dock.js` + `dock.ps1` | Edge 窗口的启动、停靠、小窗外框和全局快捷键（Win32） |
 | `fonts.ps1` | 守护进程启动时把已安装的 LXGW / Sarasa 字体加载到当前会话 |
+| `update.js` | 设置 → 应用 → 皮肤补丁 的更新检查与一键更新 |
 | `remove.js` | 撤销 |
 
 ### 添加语言
@@ -117,6 +124,7 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 - 补丁不会把非法值写进 Antigravity 的 `localStorage`；所有注入都是幂等的，可以完整撤销
 - 设置页只能写入白名单内的键值（语言、中文标题开关、Gemini 打开方式、快捷键）
 - 中文标题功能只在 `localStorage` 的独立键 `agPatch.titles` 中记录处理过的对话，撤销时一并清除
+- 补丁更新只做快进（`git pull --ff-only`），不会合并、重置或覆盖你本地的修改；本地有冲突时会报错并保持原样
 - 翻译标题用的是一次性的智能体运行：模型只看到英文标题，看不到你的消息；使用只读规划模式、关闭命令自动执行；出现任何工具调用立即中止；运行结束后删除，全程不在侧栏显示
 
 ## 已知限制
@@ -144,6 +152,8 @@ A runtime patch for Google Antigravity on Windows. It injects over Antigravity's
 - **Theme:** two color styles, each with a light and a dark palette, picked in Settings → Appearance → Color Style. *Clay* (default) is ivory and charcoal with clay-red accents. *Classic* is neutral white and dark like the Claude Code app, with blue selection and links. Both cover chat, sidebar, code highlighting and the embedded VS Code views. Fonts are picked separately in Settings → Appearance → Fonts: Latin is Claude-style (serif replies) or system, and Chinese is LXGW WenKai or Microsoft YaHei.
 - **Simplified Chinese UI:** about 1,550 strings plus template and context rules. Only controls are translated, never chat content or code. Switch languages in Settings → General → Language.
 - **Chinese conversation titles:** Antigravity often titles Chinese conversations in English. The patch has the selected model translate that title in a short read-only throwaway run, which sees only the title. If the run fails, it falls back to the first sentence. It runs once per new conversation and never overrides a title you set.
+- **Settings, tidied:** General starts with the patch's Language, Conversations and Gemini sections. Conversations mirrors Antigravity's chat settings, which were filed under Appearance, and lists archived conversations with a Restore button. Settings → Application → Theme Patch checks for patch updates and can fast-forward a git clone.
+- **Narrow windows:** the auxiliary pane opens as a drawer over the conversation instead of being pushed past the window edge.
 - **Plugin sidecar projects hidden:** plugins with a sidecar come with an empty project that re-registers itself after deletion. These projects are hidden from the sidebar, Settings and project pickers.
 - **Gemini window (needs Microsoft Edge):** a real Edge window with its own profile, so Google sign-in works. There are two layouts:
   - *Float* (default): a floating window opened by the top-left button or `Ctrl+Alt+G`. Hover its top edge to move, hide or close it; drag the bottom-right corner to resize.

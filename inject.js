@@ -29,6 +29,7 @@ const {
 } = require('./i18n');
 const { buildModeScript, chromeOverride, isGeminiWebview } = require('./modes');
 const { GEMINI_BINDING, GeminiDock } = require('./gemini-dock');
+const { UPDATE_BINDING, PatchUpdater } = require('./update');
 const { buildTitleScript } = require('./titles');
 const { buildProjectHideScript } = require('./projects');
 
@@ -178,6 +179,10 @@ async function watch() {
     },
   });
   process.on('exit', () => dock.stop());
+  // Settings > Application > 补丁: update check for the patch itself
+  const patchStatusExpr = (st) =>
+    `window.__agLangRow && window.__agLangRow.patchStatus && window.__agLangRow.patchStatus(${JSON.stringify(st)})`;
+  const updater = new PatchUpdater({ log, onStatus: (st) => evalAll(patchStatusExpr(st)) });
   dock.configure(readConfig()); // registers the global shortcut right away
   let expr = buildExpression();
 
@@ -194,6 +199,7 @@ async function watch() {
     entry.scriptId = identifier;
     const res = await entry.session.evaluate(expr);
     entry.session.evaluate(hotkeyStatusExpr()).catch(() => {});
+    entry.session.evaluate(patchStatusExpr(updater.status)).catch(() => {});
     return res;
   }
 
@@ -216,6 +222,10 @@ async function watch() {
             const { action, top, rect } = JSON.parse(payload);
             dock.send(action, Number(top) || 0, rect);
           } catch {}
+          return;
+        }
+        if (name === UPDATE_BINDING) {
+          updater.handle(payload);
           return;
         }
         if (name === SETTING_BINDING) {
@@ -242,6 +252,7 @@ async function watch() {
       await session.send('Runtime.addBinding', { name: LOCALE_BINDING });
       await session.send('Runtime.addBinding', { name: GEMINI_BINDING });
       await session.send('Runtime.addBinding', { name: SETTING_BINDING });
+      await session.send('Runtime.addBinding', { name: UPDATE_BINDING });
       const res = await apply(entry);
       log(`[✓] 已注入: ${shortTitle(page)}  (${describe(res)})`);
     } catch (err) {

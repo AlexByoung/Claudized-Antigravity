@@ -88,6 +88,7 @@ function buildI18nScript() {
   let appTitles = ['Application'];
   let versionTitles = ['App version'];
   let appearanceTitles = ['Appearance'];
+  let chatTitles = ['Chat Settings'];
   if (config.translate) {
     const { dict, rules = [], timeRules = [], sentences = [] } = loadLocale(config.locale);
     const payload = JSON.stringify({ locale: config.locale, dict, rules, timeRules, sentences });
@@ -96,6 +97,7 @@ function buildI18nScript() {
     if (typeof dict.Application === 'string') appTitles.push(dict.Application);
     if (typeof dict['App version'] === 'string') versionTitles.push(dict['App version']);
     if (typeof dict.Appearance === 'string') appearanceTitles.push(dict.Appearance);
+    if (typeof dict['Chat Settings'] === 'string') chatTitles.push(dict['Chat Settings']);
   }
   const gemini =
     config.geminiMode === false || config.geminiEngine === 'webview'
@@ -108,6 +110,8 @@ function buildI18nScript() {
     current, locales, generalTitles, appTitles, versionTitles, gemini,
     chineseTitles: config.chineseTitles !== false,
     appearanceTitles,
+    chatTitles,
+    updateBinding: '__agPatchUpdate',
     themeStyle: config.themeStyle === 'classic' ? 'classic' : 'clay',
     latinFont: config.latinFont === 'system' ? 'system' : 'claude',
     cjkFont: config.cjkFont === 'system' ? 'system' : 'wenkai',
@@ -179,39 +183,6 @@ function langRowMain(C) {
       group.appendChild(b);
     }
 
-    // Chinese conversation titles: [ On | Off ] (titles.js)
-    const TT = zh
-      ? { title: '中文对话标题', desc: '新对话的第一条消息是中文时，让当前选择的模型把自动生成的英文标题翻译成中文（约 10 秒，每个新对话多一次简短调用）；失败时用第一句代替。手动改过的标题不会被覆盖。', on: '开启', off: '关闭' }
-      : { title: 'Chinese conversation titles', desc: 'When a new conversation starts in Chinese, the selected model translates its auto-generated English title (about 10 s, one short extra call per conversation); if that fails, the first sentence is used. Titles you edit are never overwritten.', on: 'On', off: 'Off' };
-    const card = sec.querySelector('.divide-y');
-    card.insertAdjacentHTML('beforeend', rowHtml('<div role="group" aria-orientation="horizontal" class="inline-flex items-center rounded-lg border border-border bg-secondary/20 p-0.5 gap-0.5 select-none h-8"></div>'));
-    const row = card.lastElementChild;
-    row.querySelector('[data-k=title]').textContent = TT.title;
-    const titleDesc = row.querySelector('[data-k=desc]');
-    titleDesc.textContent = TT.desc;
-    const titleGroup = row.querySelector('[role=group]');
-    for (const [on, label] of [[true, TT.on], [false, TT.off]]) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = BTN;
-      b.textContent = label;
-      b.setAttribute('aria-pressed', String(on === C.chineseTitles));
-      if (on === C.chineseTitles) b.setAttribute('data-pressed', '');
-      b.addEventListener('click', () => {
-        if (on === C.chineseTitles) return;
-        const send = window[C.settingBinding];
-        if (typeof send !== 'function') {
-          titleDesc.textContent = T.noWatcher;
-          return;
-        }
-        for (const x of titleGroup.children) {
-          x.setAttribute('aria-pressed', String(x === b));
-          x.toggleAttribute('data-pressed', x === b);
-        }
-        send(JSON.stringify({ key: 'chineseTitles', value: on })); // watcher writes config.json, then re-injects
-      });
-      titleGroup.appendChild(b);
-    }
     return sec;
   }
 
@@ -565,7 +536,7 @@ function langRowMain(C) {
             x.setAttribute('aria-pressed', String(x === b));
             x.toggleAttribute('data-pressed', x === b);
           }
-          document.documentElement.setAttribute(r.attr, value);
+          if (r.attr) document.documentElement.setAttribute(r.attr, value);
           send(JSON.stringify({ key: r.key, value }));
         });
         group.appendChild(b);
@@ -583,10 +554,288 @@ function langRowMain(C) {
       { title: L.cjk, key: 'cjkFont', attr: 'data-ag-cjk', current: C.cjkFont, options: [['wenkai', L.wenkai], ['system', L.hei]] },
     ]);
 
+  // ── Conversations (Settings > General) ───────────────────────────────
+  // Antigravity puts its "Chat Settings" (verbose chat, width) under
+  // Appearance. React owns that section, so it is not moved: it is hidden
+  // there and mirrored here, each mirror control clicking the hidden original
+  // (Settings keeps every panel mounted) and copying its state back. Below:
+  // Chinese titles and the archived conversations, which otherwise only show
+  // through the sidebar filter.
+  const CONVO_ID = 'ag-convo-row';
+  const PATCH_ID = 'ag-patch-row';
+  const V = zh
+    ? {
+        heading: '对话', titles: '中文对话标题', on: '开启', off: '关闭',
+        archived: '已归档的对话', none: '没有已归档的对话', count: (n) => n + ' 个', show: '查看', hide: '收起', restore: '恢复', restored: '已恢复',
+        untitled: '未命名对话',
+        patch: '皮肤补丁', patchRow: 'Claudized Antigravity', check: '检查更新', update: '立即更新', download: '前往下载',
+        more: (n) => '（' + n + ' 个更新）',
+        states: {
+          idle: '', checking: '正在检查…', latest: '已是最新版本', available: '有新版本', updating: '正在更新…',
+          restarting: '已更新，正在重启补丁…', error: '检查失败',
+        },
+      }
+    : {
+        heading: 'Conversations', titles: 'Chinese conversation titles', on: 'On', off: 'Off',
+        archived: 'Archived conversations', none: 'No archived conversations', count: (n) => String(n), show: 'Show', hide: 'Hide', restore: 'Restore', restored: 'Restored',
+        untitled: 'Untitled',
+        patch: 'Theme Patch', patchRow: 'Claudized Antigravity', check: 'Check for Updates', update: 'Update Now', download: 'Download',
+        more: (n) => ' (' + n + ' new)',
+        states: {
+          idle: '', checking: 'Checking…', latest: 'Up to date', available: 'Update available', updating: 'Updating…',
+          restarting: 'Updated, restarting the patch…', error: 'Check failed',
+        },
+      };
+
+  function nativeChatSection() {
+    return [...document.querySelectorAll('[role="dialog"] div.space-y-2')].find((sec) => {
+      if (sec.id) return false;
+      const h = sec.querySelector('h3');
+      return h && (C.chatTitles || ['Chat Settings']).includes(h.textContent.trim());
+    });
+  }
+
+  // The app's Redux store and agent service, from React's fiber tree.
+  let app = null;
+  function appHooks() {
+    if (app && app.store && app.svc) return app;
+    const el = document.querySelector('[data-testid="conversation-row-sidebar"], [data-testid="new-conversation-button"]');
+    const key = el && Object.keys(el).find((k) => k.startsWith('__reactFiber$'));
+    let store = null;
+    let svc = null;
+    for (let f = key && el[key]; f && !(store && svc); f = f.return) {
+      const p = f.memoizedProps;
+      if (!store && p && p.store && typeof p.store.getState === 'function') store = p.store;
+      for (let d = f.dependencies && f.dependencies.firstContext; d; d = d.next) {
+        const v = d.memoizedValue;
+        if (!svc && v && typeof v.updateConversationAnnotations === 'function') svc = v;
+      }
+    }
+    app = store && svc ? { store, svc } : null;
+    return app;
+  }
+  function archivedList() {
+    const h = appHooks();
+    if (!h) return [];
+    const sums = (h.store.getState().trajectorySummaries || {}).summaries || {};
+    return Object.entries(sums)
+      .filter(([, s]) => s && s.annotations && s.annotations.archived && !((s.trajectoryMetadata || {}).nestingDepth > 0))
+      .map(([id, s]) => ({
+        id,
+        title: (s.annotations.title || s.summary || '').trim(),
+        t: Number((s.lastModifiedTime && s.lastModifiedTime.seconds) || 0) * 1000,
+      }))
+      .sort((a, b) => b.t - a.t);
+  }
+  const rtf = new Intl.RelativeTimeFormat(zh ? 'zh-CN' : 'en', { numeric: 'auto' });
+  function ago(t) {
+    const s = (t - Date.now()) / 1000;
+    const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60]];
+    for (const [u, n] of units) if (Math.abs(s) >= n) return rtf.format(Math.round(s / n), u);
+    return rtf.format(0, 'minute');
+  }
+
+  function buildConvo() {
+    const sec = buildLookSection(CONVO_ID, V.heading, '', [
+      { title: V.titles, key: 'chineseTitles', attr: null, current: C.chineseTitles, options: [[true, V.on], [false, V.off]] },
+    ]);
+    const card = sec.querySelector('.divide-y');
+
+    // mirrors of the native Chat Settings rows, placed first
+    const native = nativeChatSection();
+    if (native) {
+      native.setAttribute('data-ag-moved', '');
+      for (const nrow of [...native.querySelectorAll('.divide-y > *')].reverse()) {
+        const title = (nrow.querySelector('span.text-sm') || {}).textContent || '';
+        const ndesc = (nrow.querySelector('span.text-xs') || {}).textContent || '';
+        const nsw = nrow.querySelector('[role="switch"]');
+        const nbtns = [...nrow.querySelectorAll('button[aria-pressed]')];
+        if (!nsw && !nbtns.length) continue;
+        card.insertAdjacentHTML('afterbegin', rowHtml(''));
+        const row = card.firstElementChild;
+        row.querySelector('[data-k=title]').textContent = title;
+        const d = row.querySelector('[data-k=desc]');
+        d.textContent = ndesc;
+        d.hidden = !ndesc;
+        const slot = row.querySelector('.shrink-0');
+        if (nsw) {
+          // same look as the original: copy its classes and thumb
+          const sw = document.createElement('button');
+          sw.type = 'button';
+          sw.setAttribute('role', 'switch');
+          sw.className = nsw.className;
+          const sync = () => {
+            for (const a of ['aria-checked', 'data-state']) {
+              const v = nsw.getAttribute(a);
+              if (v == null) sw.removeAttribute(a);
+              else sw.setAttribute(a, v);
+            }
+            sw.className = nsw.className;
+            sw.innerHTML = nsw.innerHTML;
+          };
+          sync();
+          sw.addEventListener('click', () => {
+            nsw.click();
+            requestAnimationFrame(sync);
+          });
+          new MutationObserver(sync).observe(nsw, { attributes: true, subtree: true, childList: true });
+          slot.appendChild(sw);
+        } else {
+          slot.innerHTML = GROUP_HTML;
+          const group = slot.firstElementChild;
+          const mine = nbtns.map((nb) => {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = BTN;
+            b.textContent = nb.textContent.trim();
+            b.addEventListener('click', () => nb.click());
+            group.appendChild(b);
+            return b;
+          });
+          const sync = () => nbtns.forEach((nb, i) => {
+            const on = nb.getAttribute('aria-pressed') === 'true' || nb.hasAttribute('data-pressed');
+            mine[i].setAttribute('aria-pressed', String(on));
+            mine[i].toggleAttribute('data-pressed', on);
+          });
+          sync();
+          for (const nb of nbtns) new MutationObserver(sync).observe(nb, { attributes: true });
+        }
+      }
+    }
+
+    // archived conversations: count, and a list with Restore when opened
+    card.insertAdjacentHTML('beforeend', rowHtml('<button type="button" data-k="toggle"></button>'));
+    const arow = card.lastElementChild;
+    arow.querySelector('[data-k=title]').textContent = V.archived;
+    const adesc = arow.querySelector('[data-k=desc]');
+    adesc.hidden = false;
+    const toggle = arow.querySelector('[data-k=toggle]');
+    toggle.className = ACTION_BTN;
+    const list = document.createElement('div');
+    list.className = 'w-full divide-y divide-border';
+    list.hidden = true;
+    card.appendChild(list);
+    const render = () => {
+      const items = archivedList();
+      adesc.textContent = items.length ? V.count(items.length) : V.none;
+      toggle.hidden = !items.length;
+      if (!items.length) list.hidden = true;
+      toggle.textContent = list.hidden ? V.show : V.hide;
+      if (list.hidden) return;
+      list.innerHTML = '';
+      for (const it of items) {
+        list.insertAdjacentHTML('beforeend', rowHtml('<button type="button" data-k="restore"></button>'));
+        const r = list.lastElementChild;
+        const t = r.querySelector('[data-k=title]');
+        t.textContent = it.title || V.untitled;
+        t.classList.add('truncate');
+        const rd = r.querySelector('[data-k=desc]');
+        rd.textContent = it.t ? ago(it.t) : '';
+        rd.hidden = !it.t;
+        const btn = r.querySelector('[data-k=restore]');
+        btn.className = ACTION_BTN;
+        btn.textContent = V.restore;
+        btn.addEventListener('click', async () => {
+          const h = appHooks();
+          if (!h) return;
+          btn.disabled = true;
+          try {
+            await h.svc.updateConversationAnnotations([it.id], { archived: false }, true);
+            btn.textContent = V.restored;
+            setTimeout(render, 600);
+          } catch {
+            btn.disabled = false;
+          }
+        });
+      }
+    };
+    toggle.addEventListener('click', () => {
+      list.hidden = !list.hidden;
+      render();
+    });
+    const h = appHooks();
+    if (h) {
+      let pending = false;
+      const unsub = h.store.subscribe(() => {
+        if (!sec.isConnected) return unsub();
+        if (pending) return;
+        pending = true;
+        setTimeout(() => {
+          pending = false;
+          if (sec.isConnected) render();
+        }, 300);
+      });
+    }
+    render();
+    return sec;
+  }
+
+  // ── Patch update check (Settings > Application) ──────────────────────
+  let patchState = { state: 'idle' };
+  function paintPatch() {
+    const sec = document.getElementById(PATCH_ID);
+    if (!sec) return;
+    const st = patchState;
+    const desc = sec.querySelector('[data-k=desc]');
+    const btn = sec.querySelector('[data-k=act]');
+    const ver = 'v' + (st.version || '') + (st.head ? ' · ' + st.head : '');
+    let msg = V.states[st.state] || '';
+    if (st.state === 'available' && st.behind) msg += V.more(st.behind);
+    if (st.state === 'available' && st.latest && !st.git) msg += ' v' + st.latest;
+    if (st.state === 'error' && st.message) msg += ': ' + st.message;
+    desc.textContent = [ver, msg].filter(Boolean).join(' · ');
+    desc.hidden = false;
+    btn.textContent = st.state === 'available' ? (st.git ? V.update : V.download) : V.check;
+    btn.disabled = ['checking', 'updating', 'restarting'].includes(st.state);
+  }
+  function buildPatch() {
+    const sec = document.createElement('div');
+    sec.id = PATCH_ID;
+    sec.className = 'space-y-2';
+    sec.setAttribute('data-ag-no-i18n', '');
+    sec.innerHTML =
+      '<div class="flex flex-col gap-1"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><h3 class="m-0 text-sm font-medium"></h3></div></div></div>' +
+      '<div><div class="bg-transparent rounded-xl border border-border overflow-hidden divide-y divide-border">' +
+      rowHtml('<button type="button" data-k="act"></button>') +
+      '</div></div>';
+    sec.querySelector('h3').textContent = V.patch;
+    sec.querySelector('[data-k=title]').textContent = V.patchRow;
+    const btn = sec.querySelector('[data-k=act]');
+    btn.className = ACTION_BTN;
+    btn.addEventListener('click', () => {
+      const send = window[C.updateBinding];
+      if (typeof send !== 'function') {
+        sec.querySelector('[data-k=desc]').textContent = T.noWatcher;
+        return;
+      }
+      if (patchState.state === 'available' && !patchState.git && patchState.url) {
+        window.open(patchState.url, '_blank');
+        return;
+      }
+      send(JSON.stringify({ action: patchState.state === 'available' ? 'apply' : 'check' }));
+    });
+    setTimeout(paintPatch);
+    return sec;
+  }
+
+  // Our sections go first in a panel, in this order, before the app's own.
+  function placeTop(panel, id, buildFn, afterId) {
+    if (!panel || panel.querySelector('#' + id)) return;
+    const after = afterId && panel.querySelector('#' + afterId);
+    if (after) {
+      after.after(buildFn());
+      return;
+    }
+    const first = [...panel.querySelectorAll('div.space-y-2')].find((s) => !s.id.startsWith('ag-') && !s.parentElement.closest('div.space-y-2'));
+    if (first) first.parentElement.insertBefore(buildFn(), first);
+  }
+
   function ensure() {
     const general = panelByTitle(C.generalTitles);
-    appendSection(general, ID, build);
-    if (C.gemini) appendSection(general, GEMINI_ID, buildGemini);
+    placeTop(general, ID, build);
+    placeTop(general, CONVO_ID, buildConvo, ID);
+    if (C.gemini) placeTop(general, GEMINI_ID, buildGemini, CONVO_ID);
+    appendSection(panelByTitle(C.appTitles || ['Application']), PATCH_ID, buildPatch);
     const appearance = panelByTitle(C.appearanceTitles || ['Appearance']);
     appendSection(appearance, STYLE_ID, buildStyle);
     appendSection(appearance, FONT_ID, buildFonts);
@@ -607,13 +856,18 @@ function langRowMain(C) {
 
   window.__agLangRow = {
     // the helper's report on the global shortcut: ok | fail | off
+    patchStatus(st) {
+      patchState = st || { state: 'idle' };
+      paintPatch();
+    },
     hotkeyStatus(s) {
       hotkeyState = s;
       document.getElementById(GEMINI_ID)?._paintHotkeyDesc?.();
     },
     destroy() {
       observer.disconnect();
-      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID + ', #' + FONT_ID).forEach((n) => {
+      document.querySelectorAll('[data-ag-moved]').forEach((n) => n.removeAttribute('data-ag-moved'));
+      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID + ', #' + FONT_ID + ', #' + CONVO_ID + ', #' + PATCH_ID).forEach((n) => {
         const section = n.closest('div.space-y-2');
         // a standalone About section is ours entirely; a row inside the
         // native Version card is removed on its own
@@ -652,6 +906,8 @@ function pageMain(L) {
     '[data-project-label]',
   ].join(',');
   const ATTRS = ['placeholder', 'aria-label', 'title', 'data-placeholder', 'data-tooltip-content'];
+  // Form fields: their contents are the user's, their own attributes are UI.
+  const FIELD = 'input,textarea,select,[contenteditable="true"]';
 
   const DICT = L.dict;
   const has = Object.prototype.hasOwnProperty;
@@ -799,7 +1055,9 @@ function pageMain(L) {
       const recs = attrs.get(el);
       const rec = recs && recs[name];
       if (rec && cur === rec.t) continue;
-      if (zone < 0) zone = zoneOf(el);
+      // An input's own placeholder / label / tooltip is UI text; only what is
+      // typed into it is off-limits, so judge it by where the input sits.
+      if (zone < 0) zone = el.matches(FIELD) ? zoneOf(el.parentElement) : zoneOf(el);
       const trimmed = cur.trim();
       const out = zone && trimmed ? convert(trimmed, zone, el) : null;
       if (out == null || out === trimmed) {
@@ -823,6 +1081,7 @@ function pageMain(L) {
     if (root.nodeType === 1) {
       const fenced = root.closest(HARD) || root.closest(CONTENT);
       if (fenced && !(root.closest(CONTROLS) && fenced.contains(root.closest(CONTROLS)))) {
+        if (root.matches(FIELD)) doAttrs(root);
         return walkControlsIn(root);
       }
       doAttrs(root);
@@ -832,6 +1091,7 @@ function pageMain(L) {
       acceptNode: (n) => {
         if (n.nodeType !== 1) return NodeFilter.FILTER_ACCEPT;
         if (n.matches(HARD) || n.matches(CONTENT)) {
+          if (n.matches(FIELD)) doAttrs(n);
           contents.push(n);
           return NodeFilter.FILTER_REJECT;
         }
