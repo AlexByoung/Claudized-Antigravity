@@ -564,6 +564,21 @@ div.relative:has(> [data-testid="thinking-collapsible-trigger"]) .leading-relaxe
   margin-bottom: 0.15em !important;
 }
 
+/* 加粗 (bold). WenKai has Regular + Medium only: for weight 600 Chromium took
+   Medium and then faked extra boldness on top, smearing Chinese bold. With
+   synthesis off, Chinese bold is Medium as designed. Latin bold in the
+   reading face is Georgia Bold, a very heavy cut; slightly softer ink keeps
+   it from overpowering the line. */
+html:has(> body) {
+  font-synthesis-weight: none;
+}
+[data-testid="planner-response-text"] :is(strong, b),
+[class*="_code:not(pre_code)"] :is(strong, b),
+[data-testid="user-input-step"] :is(strong, b) {
+  font-weight: 600 !important;
+  color: color-mix(in srgb, var(--foreground) 80%, var(--background)) !important;
+}
+
 /* 代码与终端层 */
 code, pre, .monaco-editor, .xterm, [class*="language-"] {
   font-family: var(--ag-latin-mono), var(--ag-cjk-mono), 'Microsoft YaHei UI', 'Courier New', monospace !important;
