@@ -52,7 +52,7 @@
 - [Node.js](https://nodejs.org/) 22 或更高（使用内置的 `fetch` 与 `WebSocket`，无需 `npm install`）
 - Google Antigravity。它默认开启 CDP 端口（`%APPDATA%\Antigravity\DevToolsActivePort`），无需额外启动参数
 - Microsoft Edge：仅 Gemini 窗口需要
-- 可选字体：[霞鹜文楷 LXGW WenKai](https://github.com/lxgw/LxgwWenKai)（Regular + Medium）。安装后需**完全退出** Antigravity（托盘里也要退出）再打开才会生效。未安装时回退到微软雅黑。Windows 有时不会在登录时加载「仅为当前用户安装」的字体，守护进程启动时会自动加载 `LXGW*` / `Sarasa*` 字体（`fonts.ps1`）
+- 可选字体：[霞鹜文楷 LXGW WenKai](https://github.com/lxgw/LxgwWenKai)（Regular + Medium）。安装后需**完全退出** Antigravity（托盘里也要退出）再打开才会生效。未安装时回退到微软雅黑。Windows 有时不会在登录时加载「仅为当前用户安装」的字体，而 Antigravity 只认启动时已加载的字体，所以补丁把已安装的文楷文件作为**网页字体**直接提供给 Antigravity（`webfonts.js`），不依赖 Windows 是否加载，也不需要重启 Antigravity
 
 ## 安装
 
@@ -110,7 +110,8 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 | `titles.js` | 中文对话标题 |
 | `projects.js` | 隐藏插件 sidecar 项目 |
 | `gemini-dock.js` + `dock.ps1` | Edge 窗口的启动、停靠、小窗外框和全局快捷键（Win32） |
-| `fonts.ps1` | 守护进程启动时把已安装的 LXGW / Sarasa 字体加载到当前会话 |
+| `webfonts.js` | 把已安装的霞鹜文楷作为网页字体提供给 Antigravity（`@font-face` + 调试连接直接返回字体文件） |
+| `fonts.ps1` | 守护进程启动时顺带把 LXGW / Sarasa 字体加载到 Windows 会话（供其他程序使用） |
 | `update.js` | 设置 → 应用 → 皮肤补丁 的更新检查与一键更新 |
 | `remove.js` | 撤销 |
 

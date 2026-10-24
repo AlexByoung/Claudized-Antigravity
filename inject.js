@@ -30,12 +30,13 @@ const {
 const { buildModeScript, chromeOverride, isGeminiWebview } = require('./modes');
 const { GEMINI_BINDING, GeminiDock } = require('./gemini-dock');
 const { UPDATE_BINDING, PatchUpdater } = require('./update');
+const { fontFaceCss, serveFonts } = require('./webfonts');
 const { buildTitleScript } = require('./titles');
 const { buildProjectHideScript } = require('./projects');
 
 function buildExpression() {
   const config = readConfig();
-  return buildInjectExpression(readCss(), buildI18nScript() + '\n' + buildModeScript() + '\n' + buildTitleScript(config) + '\n' + buildProjectHideScript(config), config);
+  return buildInjectExpression(readCss() + '\n' + fontFaceCss(), buildI18nScript() + '\n' + buildModeScript() + '\n' + buildTitleScript(config) + '\n' + buildProjectHideScript(config), config);
 }
 
 function shortTitle(page) {
@@ -214,6 +215,8 @@ async function watch() {
         log(`[-] 窗口已关闭: ${shortTitle(page)}`);
       };
       await session.send('Page.enable');
+      // LXGW WenKai as a web font (webfonts.js), independent of Windows' font list
+      await serveFonts(session, log).catch((e) => log(`[!] 网页字体不可用: ${e.message}`));
       // Settings > General > Language row calls this binding; we persist the
       // choice in config.json and the folder watcher below re-applies it.
       session.on('Runtime.bindingCalled', ({ name, payload }) => {
