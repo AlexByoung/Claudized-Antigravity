@@ -1,6 +1,6 @@
 # Claudized Antigravity
 
-给 Google Antigravity（Windows 版）的非侵入式界面补丁：**Claude Code 风格的明暗主题**、**完整简体中文界面**，以及**和 Antigravity 并行使用的 Gemini 窗口**。
+给 Google Antigravity（Windows / macOS）的非侵入式界面补丁：**Claude Code 风格的明暗主题**、**完整简体中文界面**，以及**和 Antigravity 并行使用的 Gemini 窗口**。
 
 补丁通过 Antigravity 自带的 Chrome DevTools Protocol（CDP）端口在运行时注入，**不修改任何安装文件**，Antigravity 升级不会被破坏，随时可以一键撤销。
 
@@ -28,8 +28,8 @@
 - **中文对话标题**：Antigravity 生成标题的提示词写死在语言服务里（"3-5 words, title-cased"），中文对话也常常得到英文标题。新对话的第一条消息是中文而标题是英文时，补丁让你当前选择的模型把这个英文标题翻译成中文（约 10–25 秒），失败时退回用第一句。只处理开启后新建的对话，每个对话只改一次，手动改过的标题不会被覆盖。可在设置 → 常规 → 语言中关闭
 - **隐藏插件项目**：带后台小程序（sidecar）的插件会自带一个空项目，例如 Science 插件的 `science/biomolecular_structure_viewer`。删除后插件重启又会重新登记，所以删不掉。补丁从 `~/.gemini/config/config.json` 的 `sidecars` 读出这些项目，在侧栏、设置和项目选择器里隐藏，不影响插件本身
 
-**Gemini 窗口**（需要 Microsoft Edge）
-- 使用独立的 Edge 配置目录登录 Google，登录状态持久保存，不影响你自己的 Edge
+**Gemini 窗口**（Windows 需要 Microsoft Edge；macOS 使用系统自带的 WebKit，无需额外浏览器）
+- 使用独立的 Edge 配置目录（macOS：独立的 WebKit 数据存储）登录 Google，登录状态持久保存，不影响你自己的浏览器
 - 两种打开方式，在设置 → 常规 → **Gemini** 中选择：
   - **小窗**（默认）：左上角 Gemini 按钮或全局快捷键（默认 `Ctrl+Alt+G`，可自定义）打开浮动小窗。隐藏了 Edge 顶栏；鼠标移到小窗顶边出现拖动条和「— / ×」，右下角可拖动缩放
   - **全屏切换**：鼠标悬停左上角，在下拉菜单里切换 Antigravity / Gemini。Gemini 铺满 Antigravity 内容区，标题栏颜色同步 Gemini（包括展开侧栏时的双色标题栏）
@@ -48,13 +48,22 @@
 
 ## 环境要求
 
+**Windows**
+
 - Windows 10 / 11
 - [Node.js](https://nodejs.org/) 22 或更高（使用内置的 `fetch` 与 `WebSocket`，无需 `npm install`）
 - Google Antigravity。它默认开启 CDP 端口（`%APPDATA%\Antigravity\DevToolsActivePort`），无需额外启动参数
 - Microsoft Edge：仅 Gemini 窗口需要
 - 可选字体：[霞鹜文楷 LXGW WenKai](https://github.com/lxgw/LxgwWenKai)（Regular + Medium）。安装后需**完全退出** Antigravity（托盘里也要退出）再打开才会生效。未安装时回退到微软雅黑。Windows 有时不会在登录时加载「仅为当前用户安装」的字体，而 Antigravity 只认启动时已加载的字体，所以补丁把已安装的文楷文件作为**网页字体**直接提供给 Antigravity（`webfonts.js`），不依赖 Windows 是否加载，也不需要重启 Antigravity
 
-## 安装
+**macOS**
+
+- macOS 13 或更高（Apple 芯片 / Intel 均可）
+- 不需要另装 Node.js：脚本优先用 PATH 里 22+ 的 `node`，否则直接借用 Antigravity 自带的 Node（`ELECTRON_RUN_AS_NODE`）
+- Gemini 小窗需要 Xcode 命令行工具（`xcode-select --install`），守护进程第一次启动时会用 `swiftc` 把 `dock-mac.swift` 编译到 `.build/`（约 20 秒）
+- 可选字体：霞鹜文楷，装到「字体册」即可（`~/Library/Fonts`），macOS 不存在 Windows 那样的加载问题；未安装时中文回退到苹方
+
+## 安装（Windows）
 
 ```bat
 git clone https://github.com/AlexByoung/Claudized-Antigravity.git %USERPROFILE%\.antigravity-patch
@@ -74,7 +83,31 @@ copy config.example.json config.json
 
 也可以用 `npm run watch` / `npm run inject` / `npm run remove`。
 
-第一次打开 Gemini 时，在弹出的 Edge 窗口里登录 Google 账号即可。Google 不允许在内嵌浏览器里登录，所以这里用的是真正的 Edge 窗口。
+## 安装（macOS）
+
+```bash
+git clone https://github.com/AlexByoung/Claudized-Antigravity.git ~/.antigravity-patch
+cd ~/.antigravity-patch
+cp config.example.json config.json
+./watch.sh
+```
+
+| 文件 | 作用 |
+| --- | --- |
+| `watch.sh` | 后台启动守护进程（推荐）。日志在 `watch.log` |
+| `autostart-on.sh` | 登录时自动启动守护进程（`~/Library/LaunchAgents` 里的 LaunchAgent） |
+| `autostart-off.sh` | 取消登录启动 |
+| `inject.sh` | 单次注入（窗口刷新后失效，调试用） |
+| `remove.sh` | 停止守护进程、关闭 Gemini 小窗、撤销所有注入 |
+| `node.sh` | 上面几个脚本共用的 Node 启动器；可用 `AG_NODE` 指定 Node，`AG_APP` 指定 Antigravity.app 路径 |
+
+macOS 上的差别：
+- Gemini 按钮在主窗格标题栏左侧（红绿灯右边）；macOS 没有窗口内的 File / View / Window 菜单，那部分样式自动不生效
+- 快捷键默认 `⌃⌥G`，录制时可用 ⌘。用的是 Carbon 全局热键，不需要「辅助功能」权限
+- 小窗在 Antigravity（或 Gemini 自己）处于前台时置顶，切到其他应用后不再遮挡
+- Gemini 的登录数据在 WebKit 的独立存储里（随 `.build/gemini-dock` 程序），删除 `~/Library/WebKit/gemini-dock` 即可清除（先运行 `remove.sh`）
+
+第一次打开 Gemini 时，在弹出的 Edge 窗口（macOS：Gemini 小窗）里登录 Google 账号即可。Google 不允许在内嵌浏览器里登录，所以这里用的是真正的 Edge 窗口。
 
 ## 配置
 
@@ -110,6 +143,8 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 | `titles.js` | 中文对话标题 |
 | `projects.js` | 隐藏插件 sidecar 项目 |
 | `gemini-dock.js` + `dock.ps1` | Edge 窗口的启动、停靠、小窗外框和全局快捷键（Win32） |
+| `dock-mac.swift` | macOS 版 Gemini 小窗 / 全屏切换和全局快捷键（AppKit + WebKit），协议与 `dock.ps1` 相同 |
+| `*.sh` | macOS 启动脚本 |
 | `webfonts.js` | 把已安装的霞鹜文楷作为网页字体提供给 Antigravity（`@font-face` + 调试连接直接返回字体文件） |
 | `fonts.ps1` | 守护进程启动时顺带把 LXGW / Sarasa 字体加载到 Windows 会话（供其他程序使用） |
 | `update.js` | 设置 → 应用 → 皮肤补丁 的更新检查与一键更新 |
@@ -131,7 +166,8 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 ## 已知限制
 
 - 中文标题是对 Antigravity 英文标题的翻译，每个新对话会多一次简短的模型调用，消耗少量额度
-- 仅支持 Windows
+- 支持 Windows 与 macOS；Linux 未测试
+- macOS 的 Gemini 小窗基于 WebKit，Google 偶尔可能要求额外验证登录
 - Antigravity 更新改动界面结构后，个别样式或词条可能失效，需要跟进更新
 - 全屏切换模式在浅色主题下测试较少，欢迎反馈
 
@@ -148,7 +184,7 @@ Gemini 的 Edge 配置目录：`%LOCALAPPDATA%\AntigravityPatch\EdgeGemini`。�
 <a id="english"></a>
 ## English
 
-A runtime patch for Google Antigravity on Windows. It injects over Antigravity's built-in CDP port and never touches the installation.
+A runtime patch for Google Antigravity on Windows and macOS. It injects over Antigravity's built-in CDP port and never touches the installation.
 
 - **Theme:** two color styles, each with a light and a dark palette, picked in Settings → Appearance → Color Style. *Clay* (default) is ivory and charcoal with clay-red accents. *Classic* is neutral white and dark like the Claude Code app, with blue selection and links. Both cover chat, sidebar, code highlighting and the embedded VS Code views. Fonts are picked separately in Settings → Appearance → Fonts: Latin is Claude-style (serif replies) or system, and Chinese is LXGW WenKai or Microsoft YaHei.
 - **Simplified Chinese UI:** about 1,550 strings plus template and context rules. Only controls are translated, never chat content or code. Switch languages in Settings → General → Language.
@@ -161,6 +197,8 @@ A runtime patch for Google Antigravity on Windows. It injects over Antigravity's
   - *Docked*: a hover menu switches the whole content area between Antigravity and Gemini. The title bar takes Gemini's colours.
 
 Requirements: Windows 10/11, Node.js ≥ 22, and Antigravity. Microsoft Edge is needed for Gemini. LXGW WenKai is optional.
+
+macOS: no Node install needed (the scripts fall back to the Node built into Antigravity). The Gemini window is a small native WebKit helper (`dock-mac.swift`), compiled on first use, so it needs the Xcode Command Line Tools. Clone into `~/.antigravity-patch`, copy `config.example.json` to `config.json`, then run `./watch.sh`. `./autostart-on.sh` adds a login LaunchAgent; `./remove.sh` reverts everything.
 
 Install: clone into `%USERPROFILE%\.antigravity-patch`, copy `config.example.json` to `config.json`, then run `watch.bat`. Run `autostart-on.bat` to start the watcher at login. `remove.bat` reverts everything.
 

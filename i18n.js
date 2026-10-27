@@ -134,9 +134,11 @@ function langRowMain(C) {
   const ID = 'ag-lang-row';
   const ABOUT_ID = 'ag-about-row';
   const zh = C.current !== 'en';
+  const MAC = /Mac/.test(navigator.platform);
+  const WATCH = MAC ? 'watch.sh' : 'watch.bat';
   const T = zh
-    ? { heading: '语言', title: '界面语言', desc: '切换 Antigravity 的界面语言，对话内容不受影响。', noWatcher: '需要后台守护进程（watch.bat）运行才能切换。', switching: '正在切换…' }
-    : { heading: 'Language', title: 'Display Language', desc: 'Interface language of Antigravity. Conversation content is not affected.', noWatcher: 'Switching requires the background watcher (watch.bat).', switching: 'Switching…' };
+    ? { heading: '语言', title: '界面语言', desc: '切换 Antigravity 的界面语言，对话内容不受影响。', noWatcher: `需要后台守护进程（${WATCH}）运行才能切换。`, switching: '正在切换…' }
+    : { heading: 'Language', title: 'Display Language', desc: 'Interface language of Antigravity. Conversation content is not affected.', noWatcher: `Switching requires the background watcher (${WATCH}).`, switching: 'Switching…' };
   const BTN =
     'inline-flex items-center justify-center transition-colors text-secondary-foreground outline-none cursor-pointer border-none shrink-0 select-none h-full hover:text-foreground data-[pressed]:bg-secondary data-[pressed]:text-foreground disabled:opacity-50 disabled:pointer-events-none text-sm px-2 rounded-md gap-1.5';
 
@@ -319,7 +321,7 @@ function langRowMain(C) {
         dockedDesc: '在左上角的下拉菜单中切换，Antigravity 与 Gemini 各自占满整个窗口。',
         hotkey: '快捷键',
         hotkeyDesc: '在任何地方打开或收起 Gemini（全屏切换时为切换模式）。点击右侧按钮后按下新的组合键，Esc 取消，Backspace 关闭快捷键。',
-        none: '未设置', recording: '请按下组合键…', needMod: '需要包含 Ctrl、Alt、Shift 或 Win',
+        none: '未设置', recording: '请按下组合键…', needMod: MAC ? '需要包含 ⌃、⌥、⇧ 或 ⌘' : '需要包含 Ctrl、Alt、Shift 或 Win',
         fail: '这个组合键已被其他程序占用，请换一个。', saving: '正在保存…',
       }
     : {
@@ -330,10 +332,11 @@ function langRowMain(C) {
         dockedDesc: 'The top-left menu switches the whole window between Antigravity and Gemini.',
         hotkey: 'Shortcut',
         hotkeyDesc: 'Opens or hides Gemini from anywhere (switches modes in full-window layout). Click the button, then press a new combination; Esc cancels, Backspace turns it off.',
-        none: 'Not set', recording: 'Press a combination…', needMod: 'Include Ctrl, Alt, Shift or Win',
+        none: 'Not set', recording: 'Press a combination…', needMod: MAC ? 'Include ⌃, ⌥, ⇧ or ⌘' : 'Include Ctrl, Alt, Shift or Win',
         fail: 'Another program already uses this combination; pick another.', saving: 'Saving…',
       };
-  const keyLabel = (s) => (s ? s.split('+').join(' + ') : G.none);
+  const MAC_KEYS = { Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Cmd: '⌘', Win: '⌘' };
+  const keyLabel = (s) => (!s ? G.none : MAC ? s.split('+').map((k) => MAC_KEYS[k] || k).join(' ') : s.split('+').join(' + '));
   // KeyboardEvent.code -> the key names gemini-dock.js understands
   function keyName(code) {
     let m;
@@ -434,10 +437,10 @@ function langRowMain(C) {
         rec.textContent = G.none;
         return save('geminiHotkey', '', desc);
       }
-      const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && 'Win'].filter(Boolean);
+      const mods = [e.ctrlKey && 'Ctrl', e.altKey && 'Alt', e.shiftKey && 'Shift', e.metaKey && (MAC ? 'Cmd' : 'Win')].filter(Boolean);
       const key = keyName(e.code);
       if (!key) {
-        rec.textContent = mods.length ? mods.join(' + ') + ' + …' : G.recording;
+        rec.textContent = mods.length ? keyLabel(mods.join('+')) + (MAC ? ' …' : ' + …') : G.recording;
         return;
       }
       if (!mods.length) {
@@ -491,7 +494,7 @@ function langRowMain(C) {
         style: 'Color Style', styleHint: 'Each has a light and a dark palette, following the theme above.', styleRow: 'Style',
         clay: 'Clay', classic: 'Classic',
         fonts: 'Fonts', latin: 'Latin font', cjk: 'Chinese font',
-        claude: 'Claude', system: 'System', wenkai: 'LXGW WenKai', hei: 'Sans (YaHei)',
+        claude: 'Claude', system: 'System', wenkai: 'LXGW WenKai', hei: MAC ? 'Sans (PingFang)' : 'Sans (YaHei)',
       };
   const GROUP_HTML = '<div role="group" aria-orientation="horizontal" class="inline-flex items-center rounded-lg border border-border bg-secondary/20 p-0.5 gap-0.5 select-none h-8"></div>';
 

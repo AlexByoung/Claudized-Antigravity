@@ -12,10 +12,13 @@ const fs = require('fs');
 const path = require('path');
 
 const URL_PREFIX = '/__ag_fonts/';
-const DIRS = [
-  path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Fonts'),
-  path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts'),
-];
+const DIRS =
+  process.platform === 'darwin'
+    ? [path.join(require('os').homedir(), 'Library', 'Fonts'), '/Library/Fonts']
+    : [
+        path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Windows', 'Fonts'),
+        path.join(process.env.WINDIR || 'C:\\Windows', 'Fonts'),
+      ];
 // file name -> face; only these files are ever served
 const FACES = [
   { re: /^LXGWWenKai-Regular\.ttf$/i, family: 'LXGW WenKai', weight: 400, local: ['LXGW WenKai Regular', 'LXGWWenKai-Regular'] },

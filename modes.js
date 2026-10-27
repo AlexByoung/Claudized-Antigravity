@@ -53,6 +53,9 @@ function modeMain(C) {
     delete window.__agMode;
   }
 
+  // macOS: no in-window menu bar; the title bar is the main pane's top row,
+  // whose left cluster (past the traffic lights) holds the switcher.
+  const MAC = /Mac/.test(navigator.platform);
   const KEY = 'ag-patch-mode'; // sessionStorage: survives reloads within one launch
   const BG_KEY = 'ag-patch-gemini-bg';
   // (What each mode is for is explained in Settings > General > Gemini.)
@@ -62,14 +65,14 @@ function modeMain(C) {
       floatOpen: '打开 Gemini 小窗',
       floatClose: '收起 Gemini 小窗',
       opening: '正在打开 Gemini…',
-      noWatcher: 'Gemini 窗口需要后台守护进程（watch.bat）运行。',
+      noWatcher: `Gemini 窗口需要后台守护进程（${MAC ? 'watch.sh' : 'watch.bat'}）运行。`,
     },
     en: {
       label: 'Switch mode',
       floatOpen: 'Open Gemini',
       floatClose: 'Hide Gemini',
       opening: 'Opening Gemini…',
-      noWatcher: 'The Gemini window needs the background watcher (watch.bat).',
+      noWatcher: `The Gemini window needs the background watcher (${MAC ? 'watch.sh' : 'watch.bat'}).`,
     },
   };
   const ICON = {
@@ -148,7 +151,8 @@ function modeMain(C) {
     .ag-mode-item[aria-checked="true"] .ag-check { visibility: visible; }
 
     /* Gemini mode: the title bar takes Gemini's header color */
-    html.ag-gemini-on [data-testid="title-menu-bar"] { background: var(--ag-gemini-bar, var(--ag-gemini-bg)) !important; }
+    html.ag-gemini-on [data-testid="title-menu-bar"],
+    html.ag-gemini-on [class*="@container/titlebar"] { background: var(--ag-gemini-bar, var(--ag-gemini-bg)) !important; }
     /* Over Gemini the menu sits in an exactly-shaped hole: no outer shadow */
     html.ag-gemini-on #ag-mode-menu { box-shadow: none; }
     html.ag-gemini-on #ag-mode-menu {
@@ -202,17 +206,37 @@ function modeMain(C) {
   const cleanUA = navigator.userAgent.replace(/\s(Antigravity|Electron)\/\S+/g, '');
 
   // ── Watcher bridge (Edge engine) ─────────────────────────────────────
+  function titleBar() {
+    return document.querySelector('[data-testid="title-menu-bar"]') ||
+      (MAC ? document.querySelector('[class*="@container/titlebar"] > div:first-child') : null);
+  }
   function barBottom() {
-    const bar = document.querySelector('[data-testid="title-menu-bar"]');
+    const bar = titleBar();
     const b = bar ? bar.getBoundingClientRect().bottom : 35;
     return b > 0 ? b : 35;
   }
   function dockCall(action, rect) {
     const send = window[cfg.binding];
     if (typeof send !== 'function') return false;
-    send(JSON.stringify({ action, top: Math.round(barBottom() * devicePixelRatio), rect: rect || null }));
+    send(JSON.stringify({ action, top: Math.round(barBottom() * devicePixelRatio), rect: rect || null, win: MAC ? winGeometry() : undefined }));
     return true;
   }
+  // macOS: the helper places Gemini from the page's own window geometry
+  // (screen points), so docked Gemini follows moves and resizes through this.
+  function winGeometry() {
+    return [screenX, screenY, outerWidth, outerHeight, innerHeight, devicePixelRatio];
+  }
+  let lastGeo = '';
+  const geoTimer = MAC
+    ? setInterval(() => {
+        if (destroyed || cfg.layout !== 'docked' || mode !== 'gemini') return;
+        const g = winGeometry().join(' ');
+        if (g !== lastGeo) {
+          lastGeo = g;
+          dockCall('top');
+        }
+      }, 250)
+    : null;
 
   // ── Colors ───────────────────────────────────────────────────────────
   function isDark(hex) {
@@ -446,7 +470,9 @@ function modeMain(C) {
 
   // ── Small-window layout: one Gemini button ───────────────────────────
   function hotkeyText() {
-    return cfg.hotkey ? cfg.hotkey.split('+').join(' + ') : '';
+    if (!cfg.hotkey) return '';
+    if (MAC) return cfg.hotkey.split('+').map((k) => ({ Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Cmd: '⌘', Win: '⌘' }[k] || k)).join('');
+    return cfg.hotkey.split('+').join(' + ');
   }
   function buildGeminiButton() {
     const b = document.createElement('button');
@@ -493,7 +519,7 @@ function modeMain(C) {
   function ensure() {
     if (destroyed) return;
     if (!style.isConnected && document.head) document.head.appendChild(style);
-    const bar = document.querySelector('[data-testid="title-menu-bar"]');
+    const bar = titleBar();
     if (isFloat()) {
       // small window: a Gemini button, no dropdown
       document.getElementById('ag-mode-switch')?.remove();
@@ -573,6 +599,7 @@ function modeMain(C) {
       if (isEdge() && (mode === 'gemini' || floatOpen)) dockCall('hide');
       document.getElementById('ag-gemini-btn')?.remove();
       destroyed = true;
+      if (geoTimer) clearInterval(geoTimer);
       mode = 'agent';
       applyColors(); // restore the theme's title bar and window-button colors
       observer.disconnect();
@@ -616,9 +643,9 @@ function chromeOverride(userAgent) {
       brands,
       fullVersionList: brands.map((b) => ({ ...b, version: b.brand === 'Not?A_Brand' ? '24.0.0.0' : full })),
       fullVersion: full,
-      platform: 'Windows',
+      platform: process.platform === 'darwin' ? 'macOS' : 'Windows',
       platformVersion: '15.0.0',
-      architecture: 'x86',
+      architecture: process.arch === 'arm64' ? 'arm' : 'x86',
       model: '',
       mobile: false,
       bitness: '64',

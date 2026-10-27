@@ -2,6 +2,7 @@
 config.json
 watch.log
 .watch.pid
+.build/
 
 node_modules/
 

@@ -4,7 +4,7 @@
   "description": "Claude Code-style light/dark theme, Simplified Chinese UI and a Gemini side window for Google Antigravity, injected over CDP without modifying the app.",
   "license": "MIT",
   "private": true,
-  "os": ["win32"],
+  "os": ["win32", "darwin"],
   "engines": {
     "node": ">=22"
   },

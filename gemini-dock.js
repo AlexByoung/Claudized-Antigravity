@@ -1,17 +1,23 @@
-// Watcher-side manager for dock.ps1, the helper that docks an Edge app window
-// (Gemini, dedicated profile) into Antigravity. See dock.ps1 for the how.
-const { spawn, spawnSync } = require('child_process');
+// Watcher-side manager for the Gemini helper: dock.ps1 on Windows (docks an
+// Edge app window, dedicated profile, into Antigravity), dock-mac.swift on
+// macOS (a WebKit panel). Both speak the same stdin/stdout protocol; see
+// dock.ps1 for the how.
+const { spawn, spawnSync, execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
+const IS_MAC = process.platform === 'darwin';
 const DOCK_SCRIPT = path.join(__dirname, 'dock.ps1');
+const MAC_SOURCE = path.join(__dirname, 'dock-mac.swift');
+const MAC_HELPER = path.join(__dirname, '.build', 'gemini-dock');
 const PROFILE_DIR = path.join(process.env.LOCALAPPDATA || '', 'AntigravityPatch', 'EdgeGemini');
 const GEMINI_BINDING = '__agPatchGemini';
 const DEFAULT_HOTKEY = 'Ctrl+Alt+G';
 
 // "Ctrl+Alt+G" -> { mods, vk } for RegisterHotKey, or null if invalid.
 // At least one modifier is required, so a plain key is never taken globally.
-const MODS = { Ctrl: 2, Alt: 1, Shift: 4, Win: 8 };
+// Cmd (macOS) and Win are the same bit.
+const MODS = { Ctrl: 2, Alt: 1, Shift: 4, Win: 8, Cmd: 8 };
 function parseHotkey(text) {
   if (typeof text !== 'string' || !text) return null;
   const parts = text.split('+');
@@ -37,6 +43,23 @@ function findEdge(config = {}) {
     path.join(process.env.LOCALAPPDATA || '', 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
   ].filter(Boolean);
   return candidates.find((p) => fs.existsSync(p)) || null;
+}
+
+// macOS: the compiled dock-mac.swift, rebuilt when the source is newer.
+// Needs the Xcode Command Line Tools (xcode-select --install) for swiftc.
+function macHelper(log) {
+  try {
+    const built = fs.existsSync(MAC_HELPER) && fs.statSync(MAC_HELPER).mtimeMs >= fs.statSync(MAC_SOURCE).mtimeMs;
+    if (!built) {
+      fs.mkdirSync(path.dirname(MAC_HELPER), { recursive: true });
+      log && log('[Gemini] 正在编译 macOS 小窗程序（首次约 20 秒）…');
+      execFileSync('xcrun', ['swiftc', '-O', '-o', MAC_HELPER, MAC_SOURCE], { stdio: 'pipe', timeout: 300000 });
+    }
+    return MAC_HELPER;
+  } catch (err) {
+    log && log(`[!] 编译 Gemini 小窗失败（需要 Xcode 命令行工具：xcode-select --install）: ${String(err.stderr || err.message).trim().split('\n')[0]}`);
+    return null;
+  }
 }
 
 function helperArgs(edge, url, extra = []) {
@@ -67,6 +90,13 @@ class GeminiDock {
     if (this.start() && !fresh) this.sendConfig(config); // a fresh one got it in start()
   }
 
+  // macOS: the helper has no way to find Antigravity's window by itself, so
+  // the page reports it: [screenX, screenY, outerWidth, outerHeight, innerHeight, dpr]
+  sendFrame(win) {
+    if (!IS_MAC || !this.child || !Array.isArray(win) || win.length !== 6 || !win.every(Number.isFinite)) return;
+    this.child.stdin.write(`frame ${win.map((v) => Math.round(v * 100) / 100).join(' ')}\n`);
+  }
+
   sendConfig(config) {
     const layout = config.geminiLayout === 'docked' ? 'docked' : 'float';
     const hk = parseHotkey(config.geminiHotkey === undefined ? DEFAULT_HOTKEY : config.geminiHotkey);
@@ -77,6 +107,7 @@ class GeminiDock {
   start() {
     if (this.child) return true;
     const config = this.getConfig();
+    if (IS_MAC) return this.startMac(config);
     const edge = findEdge(config);
     if (!edge) {
       this.log('[!] 未找到 Microsoft Edge，无法打开 Gemini 窗口（可在 config.json 设置 edgePath）');
@@ -98,6 +129,27 @@ class GeminiDock {
       windowsVerbatimArguments: true,
     });
     this.child = child;
+    this.listen(child);
+    // A (re)started helper knows nothing yet: give it layout + shortcut first.
+    this.sendConfig(config);
+    return true;
+  }
+
+  startMac(config) {
+    const helper = macHelper(this.log);
+    if (!helper) {
+      this.onEvent('error', 'helper-build-failed');
+      return false;
+    }
+    const url = config.geminiUrl || 'https://gemini.google.com/app';
+    const child = spawn(helper, ['-Url', url, '-ParentPid', String(process.pid)], { stdio: ['pipe', 'pipe', 'pipe'] });
+    this.child = child;
+    this.listen(child);
+    this.sendConfig(config);
+    return true;
+  }
+
+  listen(child) {
     let buf = '';
     child.stdout.setEncoding('utf8');
     child.stdout.on('data', (d) => {
@@ -114,22 +166,22 @@ class GeminiDock {
       }
     });
     child.stderr.on('data', (d) => this.log(`[Gemini helper] ${String(d).trim().slice(0, 300)}`));
+    child.on('error', (err) => this.log(`[!] Gemini 小窗启动失败: ${err.message}`));
     child.on('exit', () => {
       if (this.child === child) this.child = null;
     });
-    // A (re)started helper knows nothing yet: give it layout + shortcut first.
-    this.sendConfig(config);
-    return true;
   }
 
   // action: show | hide | top | cut
   //   topPx: title-bar height in physical pixels (show, top)
   //   rect:  [x, y, w, h] in Antigravity client pixels to cut a hole for a
   //          menu, or null to close it (cut)
-  send(action, topPx, rect) {
+  //   win:   Antigravity's window geometry (macOS, see sendFrame)
+  send(action, topPx, rect, win) {
     if (!['show', 'hide', 'top', 'cut', 'toggle'].includes(action)) return;
     if (!this.child && action !== 'show') return; // nothing to hide or cut yet
     if (!this.start()) return;
+    this.sendFrame(win);
     let line = action;
     if ((action === 'show' || action === 'top') && topPx) line += ' ' + Math.round(topPx);
     if (action === 'cut' && Array.isArray(rect) && (rect.length === 4 || rect.length === 5) && rect.every(Number.isFinite)) {
@@ -147,6 +199,11 @@ class GeminiDock {
 
 // remove.js: close the Gemini window gracefully (Edge saves the profile).
 function closeGeminiWindow(config = {}) {
+  if (IS_MAC) {
+    // the helper exits with the watcher; this only catches a stray one
+    const r = spawnSync('pkill', ['-f', MAC_HELPER]);
+    return r.status === 0;
+  }
   const edge = findEdge(config) || 'msedge.exe';
   const r = spawnSync('powershell.exe', helperArgs(edge, 'about:blank', ['-Close']), {
     encoding: 'utf8',

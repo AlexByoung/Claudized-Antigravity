@@ -107,15 +107,19 @@ class PatchUpdater {
       this.log(`[更新] 已更新到 ${head}，正在重启守护进程`);
       this.set({ state: 'restarting', git: true, head });
       // start the new watcher once this one has exited and released its lock
-      const vbs = path.join(DIR, 'watch-hidden.vbs');
-      // (ping as the delay: `timeout` refuses to run without a console)
-      spawn('cmd.exe', ['/d', '/s', '/c', `"ping -n 3 127.0.0.1 >nul & start "" wscript.exe "${vbs}""`], {
-        cwd: DIR,
-        detached: true,
-        stdio: 'ignore',
-        windowsHide: true,
-        windowsVerbatimArguments: true,
-      }).unref();
+      if (process.platform === 'darwin') {
+        spawn('/bin/sh', ['-c', 'sleep 2; exec ./watch.sh'], { cwd: DIR, detached: true, stdio: 'ignore' }).unref();
+      } else {
+        const vbs = path.join(DIR, 'watch-hidden.vbs');
+        // (ping as the delay: `timeout` refuses to run without a console)
+        spawn('cmd.exe', ['/d', '/s', '/c', `"ping -n 3 127.0.0.1 >nul & start "" wscript.exe "${vbs}""`], {
+          cwd: DIR,
+          detached: true,
+          stdio: 'ignore',
+          windowsHide: true,
+          windowsVerbatimArguments: true,
+        }).unref();
+      }
       setTimeout(() => process.exit(0), 500);
     } catch (err) {
       this.set({ ...this.status, state: 'error', message: err.message.slice(0, 160) });

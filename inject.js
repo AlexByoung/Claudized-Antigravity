@@ -102,7 +102,7 @@ function acquireLock() {
   try {
     const pid = parseInt(fs.readFileSync(PID_FILE, 'utf8'), 10);
     if (pid && pid !== process.pid && isAlive(pid)) {
-      console.error(`[!] 守护进程已在运行 (PID ${pid})。如需重启请先运行 remove.bat`);
+      console.error(`[!] 守护进程已在运行 (PID ${pid})。如需重启请先运行 ${process.platform === 'darwin' ? 'remove.sh' : 'remove.bat'}`);
       process.exit(1);
     }
   } catch {}
@@ -222,8 +222,8 @@ async function watch() {
       session.on('Runtime.bindingCalled', ({ name, payload }) => {
         if (name === GEMINI_BINDING) {
           try {
-            const { action, top, rect } = JSON.parse(payload);
-            dock.send(action, Number(top) || 0, rect);
+            const { action, top, rect, win } = JSON.parse(payload);
+            dock.send(action, Number(top) || 0, rect, win);
           } catch {}
           return;
         }

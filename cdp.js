@@ -5,7 +5,12 @@ const path = require('path');
 
 const STYLE_ID = 'ag-custom-fonts';
 const PATCH_VERSION = '20261019-cc-zh-v6';
-const PORT_FILE = path.join(process.env.APPDATA || '', 'Antigravity', 'DevToolsActivePort');
+const IS_MAC = process.platform === 'darwin';
+// Antigravity's user-data folder: %APPDATA%\Antigravity / ~/Library/Application Support/Antigravity
+const APP_DATA = IS_MAC
+  ? path.join(require('os').homedir(), 'Library', 'Application Support')
+  : process.env.APPDATA || '';
+const PORT_FILE = path.join(APP_DATA, 'Antigravity', 'DevToolsActivePort');
 const PID_FILE = path.join(__dirname, '.watch.pid');
 
 // Returns the CDP port, or null when Antigravity has not written one.
