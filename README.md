@@ -37,8 +37,9 @@
 - 开机或重启后第一次打开 Gemini 时，页面可能抢在 Google 续期登录凭证之前加载而显示未登录；补丁会在 Edge 启动约 6 秒后自动刷新一次（仅当 Gemini 是当前窗口时），无需重新登录
 
 **设置整理**
-- 设置 → 常规 最上面依次是补丁的 **语言**、**对话**、**Gemini**，然后才是 Antigravity 自己的权限类设置
+- 设置 → 常规 最上面依次是补丁的 **语言**、**对话**、**连接器**、**Gemini**，然后才是 Antigravity 自己的权限类设置
 - **对话**：原本放在「外观」里的「详细智能体对话」「对话宽度」移到这里（原设置隐藏在外观中，这里的开关直接操作它），另有「中文对话标题」和 **已归档的对话** 列表，可在设置里直接恢复归档的对话
+- **连接器**：像 Claude / ChatGPT 的「连接器」页一样，列出智能体已连接和已授权的内容：当前登录的 Google 账户与套餐、Google Cloud 凭据（ADC）是否配置，以及每个插件提供的 MCP 服务、状态（可用 / 需要授权 / 出错）和工具数量；每个服务可单独开关，持有授权令牌的服务可「断开授权」
 - 设置 → 应用 → **皮肤补丁**：显示补丁版本并**检查更新**。用 git 克隆的会比对 GitHub 上的 `main`，有新版本时可一键更新（`git pull --ff-only`，随后自动重启守护进程）；下载 zip 的则比对最新 Release 并给出下载链接
 
 **其他**
@@ -189,7 +190,7 @@ A runtime patch for Google Antigravity on Windows and macOS. It injects over Ant
 - **Theme:** two color styles, each with a light and a dark palette, picked in Settings → Appearance → Color Style. *Clay* (default) is ivory and charcoal with clay-red accents. *Classic* is neutral white and dark like the Claude Code app, with blue selection and links. Both cover chat, sidebar, code highlighting and the embedded VS Code views. Fonts are picked separately in Settings → Appearance → Fonts: Latin is Claude-style (serif replies) or system, and Chinese is LXGW WenKai or Microsoft YaHei.
 - **Simplified Chinese UI:** about 1,550 strings plus template and context rules. Only controls are translated, never chat content or code. Switch languages in Settings → General → Language.
 - **Chinese conversation titles:** Antigravity often titles Chinese conversations in English. The patch has the selected model translate that title in a short read-only throwaway run, which sees only the title. If the run fails, it falls back to the first sentence. It runs once per new conversation and never overrides a title you set.
-- **Settings, tidied:** General starts with the patch's Language, Conversations and Gemini sections. Conversations mirrors Antigravity's chat settings, which were filed under Appearance, and lists archived conversations with a Restore button. Settings → Application → Theme Patch checks for patch updates and can fast-forward a git clone.
+- **Settings, tidied:** General starts with the patch's Language, Conversations, Connectors and Gemini sections. Connectors shows the signed-in Google account, whether Google Cloud credentials are set up, and every plugin's MCP services with status, tool count, an on/off switch and Disconnect for signed-in services. Conversations mirrors Antigravity's chat settings, which were filed under Appearance, and lists archived conversations with a Restore button. Settings → Application → Theme Patch checks for patch updates and can fast-forward a git clone.
 - **Narrow windows:** the auxiliary pane opens as a drawer over the conversation instead of being pushed past the window edge.
 - **Plugin sidecar projects hidden:** plugins with a sidecar come with an empty project that re-registers itself after deletion. These projects are hidden from the sidebar, Settings and project pickers.
 - **Gemini window (needs Microsoft Edge):** a real Edge window with its own profile, so Google sign-in works. There are two layouts:

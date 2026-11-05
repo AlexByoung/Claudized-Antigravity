@@ -773,6 +773,242 @@ function langRowMain(C) {
     return sec;
   }
 
+  // ── Connectors (Settings > General) ──────────────────────────────────
+  // What the agent is connected to and authorized for, like the Connectors
+  // page in Claude / ChatGPT: one row per plugin with its MCP services, their
+  // status and tool count, an on/off switch each (the app's own
+  // toggleMcpServer) and "Disconnect" where a sign-in token is held. Data
+  // comes from the app's agent service; nothing is cached.
+  const CONN_ID = 'ag-conn-row';
+  const K = zh
+    ? {
+        heading: '连接器', hint: '插件提供给智能体的服务及其授权状态。安装或移除插件请到侧栏「自定义」。',
+        loading: '正在读取…', none: '没有已安装的连接器', failed: '无法读取连接器',
+        services: (n) => n + ' 个服务', ready: (n) => n + ' 个可用', needAuth: (n) => n + ' 个需要授权', broken: (n) => n + ' 个出错', off: (n) => n + ' 个已停用',
+        signedIn: '已授权', notSignedIn: '未授权',
+        tools: (n) => n + ' 个工具', available: '可用', pending: '连接中…', disabled: '已停用', admin: '已被管理员停用',
+        gcloud: '需要 Google Cloud 凭据', error: '出错',
+        expand: '展开', collapse: '收起', disconnect: '断开授权', refresh: '刷新', custom: '自定义服务',
+        account: 'Google 账户', adc: 'Google Cloud 凭据', adcOn: '已配置，云端服务可以使用', adcOff: '未配置', adcNeeded: '未配置：部分插件服务需要它，在终端运行 gcloud auth application-default login',
+      }
+    : {
+        heading: 'Connectors', hint: 'Services that plugins give the agent, and what they are authorized for. Install or remove plugins under Customizations in the sidebar.',
+        loading: 'Loading…', none: 'No connectors installed', failed: 'Could not read connectors',
+        services: (n) => n + (n === 1 ? ' service' : ' services'), ready: (n) => n + ' ready', needAuth: (n) => n + ' need sign-in', broken: (n) => n + ' failing', off: (n) => n + ' off',
+        signedIn: 'Signed in', notSignedIn: 'Not signed in',
+        tools: (n) => n + (n === 1 ? ' tool' : ' tools'), available: 'Ready', pending: 'Connecting…', disabled: 'Off', admin: 'Disabled by admin',
+        gcloud: 'Needs Google Cloud credentials', error: 'Error',
+        expand: 'Show', collapse: 'Hide', disconnect: 'Disconnect', refresh: 'Refresh', custom: 'Custom servers',
+        account: 'Google account', adc: 'Google Cloud credentials', adcOn: 'Set up; cloud services can use them', adcOff: 'Not set up', adcNeeded: 'Not set up: some plugin services need them. Run gcloud auth application-default login in a terminal',
+      };
+  // McpServerStatus: 1 PENDING, 2 READY, 3 ERROR, 4 DISABLED_BY_ADMIN
+  function serverState(s) {
+    const sp = s.spec || {};
+    const err = String(s.error || '').split('\n')[0];
+    if (sp.disabled) return { kind: 'off', text: K.disabled };
+    if (s.status === 4) return { kind: 'off', text: K.admin };
+    if (s.status === 1) return { kind: 'pending', text: K.pending };
+    if (s.status === 3) {
+      if (/ADC credentials|gcloud auth|application-default/i.test(err) || s.needsPluginSignIn || s.authUrl) return { kind: 'auth', text: K.gcloud, full: err };
+      return { kind: 'error', text: K.error + '：' + err.replace(/^\[[^\]]*\]\s*/, '').slice(0, 80), full: err };
+    }
+    const n = (s.tools || []).length;
+    return { kind: 'ready', text: n ? K.available + ' · ' + K.tools(n) : K.available };
+  }
+  function logoEl(url, name) {
+    const box = document.createElement('div');
+    box.className = 'shrink-0 flex items-center justify-center rounded-md border border-border bg-secondary/40 overflow-hidden';
+    box.style.cssText = 'width:24px;height:24px;font-size:11px;font-weight:600;';
+    const letter = () => { box.textContent = (name || '?').trim().charAt(0).toUpperCase(); };
+    if (/^https:\/\//.test(url || '')) {
+      const img = document.createElement('img');
+      img.src = url;
+      img.alt = '';
+      img.style.cssText = 'width:18px;height:18px;object-fit:contain;';
+      img.onerror = () => { img.remove(); letter(); };
+      box.appendChild(img);
+    } else letter();
+    return box;
+  }
+
+  function buildConnectors() {
+    const sec = document.createElement('div');
+    sec.id = CONN_ID;
+    sec.className = 'space-y-2';
+    sec.setAttribute('data-ag-no-i18n', '');
+    sec.innerHTML =
+      '<div class="flex flex-col gap-1"><div class="flex items-center justify-between"><div class="flex items-center gap-1.5"><h3 class="m-0 text-sm font-medium"></h3></div><button type="button" data-k="refresh"></button></div>' +
+      '<div class="text-xs text-muted-foreground leading-relaxed" data-k="intro"></div></div>' +
+      '<div><div class="bg-transparent rounded-xl border border-border overflow-hidden divide-y divide-border" data-k="list"></div></div>';
+    sec.querySelector('h3').textContent = K.heading;
+    sec.querySelector('[data-k=intro]').textContent = K.hint;
+    const list = sec.querySelector('[data-k=list]');
+    const refresh = sec.querySelector('[data-k=refresh]');
+    refresh.className = ACTION_BTN + ' h-7 text-xs';
+    refresh.textContent = K.refresh;
+    const open = new Set(); // plugins expanded by the user
+    let busy = false;
+
+    const message = (text) => {
+      list.innerHTML = rowHtml('');
+      const d = list.querySelector('[data-k=desc]');
+      list.querySelector('[data-k=title]').textContent = text;
+      d.hidden = true;
+    };
+
+    async function load() {
+      const h = appHooks();
+      if (!h || busy) return;
+      busy = true;
+      try {
+        const [st, pl] = await Promise.all([h.svc.getMcpServerStates({}), h.svc.getAllPlugins({})]);
+        render(st.states || [], pl.plugins || []);
+      } catch {
+        message(K.failed);
+      } finally {
+        busy = false;
+      }
+    }
+
+    function render(states, plugins) {
+      if (!sec.isConnected && list.childElementCount) return;
+      const groups = new Map();
+      for (const p of plugins) groups.set(p.name, { plugin: p, servers: [] });
+      for (const s of states) {
+        const key = (s.spec && s.spec.pluginName) || '';
+        if (!groups.has(key)) groups.set(key, { plugin: null, servers: [] });
+        groups.get(key).servers.push(s);
+      }
+      const items = [...groups.values()].filter((g) => g.servers.length || (g.plugin && (g.plugin.authRequired || (g.plugin.accounts || []).length)));
+      list.innerHTML = '';
+      // the authorizations themselves: the Google account Antigravity runs
+      // under, and Google Cloud credentials (ADC) that cloud services need
+      const us = (appHooks() && appHooks().store.getState().userStatus) || null;
+      if (us) {
+        list.insertAdjacentHTML('beforeend', rowHtml(''));
+        const r = list.lastElementChild;
+        r.querySelector('[data-k=title]').textContent = K.account;
+        r.querySelector('[data-k=title]').parentElement.prepend(logoEl('https://www.gstatic.com/images/branding/product/1x/googleg_48dp.png', 'G'));
+        r.querySelector('[data-k=title]').parentElement.classList.add('gap-2');
+        const d = r.querySelector('[data-k=desc]');
+        d.textContent = [us.email, us.userTier && us.userTier.description].filter(Boolean).join(' · ') || K.signedIn;
+        d.hidden = false;
+        r.firstElementChild.lastElementChild.innerHTML = '<span class="text-xs text-muted-foreground">' + K.signedIn + '</span>';
+        const needsAdc = states.some((s) => serverState(s).kind === 'auth');
+        list.insertAdjacentHTML('beforeend', rowHtml(''));
+        const a = list.lastElementChild;
+        a.querySelector('[data-k=title]').textContent = K.adc;
+        a.querySelector('[data-k=title]').parentElement.prepend(logoEl('', 'C'));
+        a.querySelector('[data-k=title]').parentElement.classList.add('gap-2');
+        const ad = a.querySelector('[data-k=desc]');
+        ad.textContent = us.isAdc ? K.adcOn : needsAdc ? K.adcNeeded : K.adcOff;
+        ad.hidden = false;
+        a.firstElementChild.lastElementChild.innerHTML = '<span class="text-xs text-muted-foreground">' + (us.isAdc ? K.signedIn : K.notSignedIn) + '</span>';
+      }
+      if (!items.length) {
+        list.insertAdjacentHTML('beforeend', rowHtml(''));
+        list.lastElementChild.querySelector('[data-k=title]').textContent = K.none;
+        return;
+      }
+      for (const g of items) {
+        const p = g.plugin;
+        const name = p ? p.displayName || p.name : K.custom;
+        const counts = { ready: 0, auth: 0, error: 0, off: 0, pending: 0 };
+        for (const s of g.servers) counts[serverState(s).kind]++;
+        const parts = [K.services(g.servers.length)];
+        if (counts.ready) parts.push(K.ready(counts.ready));
+        if (counts.auth) parts.push(K.needAuth(counts.auth));
+        if (counts.error) parts.push(K.broken(counts.error));
+        if (counts.off) parts.push(K.off(counts.off));
+        if (p && p.authRequired) parts.push(p.isAuthenticated ? K.signedIn : K.notSignedIn);
+        const accounts = ((p && p.accounts) || []).map((a) => a.email || a.name || a.displayName || '').filter(Boolean);
+        if (accounts.length) parts.push(accounts.join('、'));
+
+        list.insertAdjacentHTML('beforeend', rowHtml('<button type="button" data-k="toggle"></button>'));
+        const row = list.lastElementChild;
+        const title = row.querySelector('[data-k=title]');
+        title.textContent = name + (p && p.version ? '  v' + p.version : '');
+        title.parentElement.prepend(logoEl(p && p.logo, name));
+        title.parentElement.classList.add('gap-2');
+        const desc = row.querySelector('[data-k=desc]');
+        desc.textContent = parts.join(' · ');
+        desc.hidden = false;
+        const toggle = row.querySelector('[data-k=toggle]');
+        toggle.className = ACTION_BTN;
+        const key = p ? p.name : '';
+        toggle.textContent = open.has(key) ? K.collapse : K.expand;
+        toggle.hidden = !g.servers.length;
+        toggle.addEventListener('click', () => {
+          if (open.has(key)) open.delete(key);
+          else open.add(key);
+          render(states, plugins);
+        });
+        if (!open.has(key)) continue;
+
+        for (const s of g.servers) {
+          const sp = s.spec || {};
+          const st = serverState(s);
+          list.insertAdjacentHTML('beforeend', rowHtml('<div class="flex items-center gap-2" data-k="ctl"></div>'));
+          const srow = list.lastElementChild;
+          srow.firstElementChild.classList.add('pl-11');
+          const t = srow.querySelector('[data-k=title]');
+          t.textContent = sp.originalServerName || sp.serverName;
+          t.classList.add('font-mono', 'text-xs');
+          const d = srow.querySelector('[data-k=desc]');
+          d.textContent = st.text;
+          d.hidden = false;
+          if (st.full) d.title = st.full;
+          if (st.kind === 'error' || st.kind === 'auth') d.classList.add('text-warning');
+          const ctl = srow.querySelector('[data-k=ctl]');
+          if (s.hasAuthToken) {
+            const b = document.createElement('button');
+            b.type = 'button';
+            b.className = ACTION_BTN + ' h-7 text-xs';
+            b.textContent = K.disconnect;
+            b.addEventListener('click', async () => {
+              b.disabled = true;
+              try {
+                await appHooks().svc.disconnectMcpOAuth(sp.serverName, '');
+              } catch {}
+              load();
+            });
+            ctl.appendChild(b);
+          }
+          // on/off switch, styled like the app's own
+          const sw = document.createElement('button');
+          sw.type = 'button';
+          sw.setAttribute('role', 'switch');
+          const on = !sp.disabled;
+          sw.setAttribute('aria-checked', String(on));
+          sw.className = 'relative inline-flex shrink-0 cursor-pointer items-center rounded-full transition-colors border-none outline-none';
+          sw.style.cssText = 'width:32px;height:18px;background:' + (on ? 'var(--primary)' : 'var(--border)') + ';';
+          sw.innerHTML = '<span style="position:absolute;top:2px;left:' + (on ? '16px' : '2px') + ';width:14px;height:14px;border-radius:999px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.25);transition:left 150ms ease"></span>';
+          sw.addEventListener('click', async () => {
+            sw.disabled = true;
+            try {
+              await appHooks().svc.toggleMcpServer({ serverName: sp.serverName, enabled: !on });
+            } catch {}
+            setTimeout(load, 400);
+          });
+          ctl.appendChild(sw);
+        }
+      }
+    }
+
+    refresh.addEventListener('click', async () => {
+      const h = appHooks();
+      refresh.disabled = true;
+      try {
+        if (h) await h.svc.refreshMcpServers({});
+      } catch {}
+      await load();
+      refresh.disabled = false;
+    });
+    message(K.loading);
+    setTimeout(load);
+    return sec;
+  }
+
   // ── Patch update check (Settings > Application) ──────────────────────
   let patchState = { state: 'idle' };
   function paintPatch() {
@@ -837,7 +1073,8 @@ function langRowMain(C) {
     const general = panelByTitle(C.generalTitles);
     placeTop(general, ID, build);
     placeTop(general, CONVO_ID, buildConvo, ID);
-    if (C.gemini) placeTop(general, GEMINI_ID, buildGemini, CONVO_ID);
+    placeTop(general, CONN_ID, buildConnectors, CONVO_ID);
+    if (C.gemini) placeTop(general, GEMINI_ID, buildGemini, CONN_ID);
     appendSection(panelByTitle(C.appTitles || ['Application']), PATCH_ID, buildPatch);
     const appearance = panelByTitle(C.appearanceTitles || ['Appearance']);
     appendSection(appearance, STYLE_ID, buildStyle);
@@ -849,7 +1086,8 @@ function langRowMain(C) {
   const observer = new MutationObserver(() => {
     if (queued || !document.querySelector('[role="dialog"]')) return;
     queued = true;
-    requestAnimationFrame(() => {
+    // animation frames stop while the window is covered; a timer still runs
+    (document.hidden ? (fn) => setTimeout(fn, 50) : requestAnimationFrame)(() => {
       queued = false;
       ensure();
     });
@@ -870,7 +1108,7 @@ function langRowMain(C) {
     destroy() {
       observer.disconnect();
       document.querySelectorAll('[data-ag-moved]').forEach((n) => n.removeAttribute('data-ag-moved'));
-      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID + ', #' + FONT_ID + ', #' + CONVO_ID + ', #' + PATCH_ID).forEach((n) => {
+      document.querySelectorAll('#' + ID + ', #' + ABOUT_ID + ', #' + GEMINI_ID + ', #' + STYLE_ID + ', #' + FONT_ID + ', #' + CONVO_ID + ', #' + PATCH_ID + ', #' + CONN_ID).forEach((n) => {
         const section = n.closest('div.space-y-2');
         // a standalone About section is ours entirely; a row inside the
         // native Version card is removed on its own
